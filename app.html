@@ -168,6 +168,15 @@
                 }
             }
 
+            // Twitter/X patterns
+            const twitterPatterns = [
+                /(?:twitter\.com|x\.com)\/[^/]+\/status\/(\d+)/,
+            ];
+            for (const pattern of twitterPatterns) {
+                const match = trimmedUrl.match(pattern);
+                if (match) return { sourceType: 'twitter', sourceId: match[1], sourceUrl: trimmedUrl };
+            }
+
             // Direct video URLs (mp4, webm, ogg, m3u8)
             const directVideoPattern = /\.(mp4|webm|ogg|m3u8)(\?|#|$)/i;
             if (directVideoPattern.test(trimmedUrl)) {
@@ -194,6 +203,7 @@
                 loom: 'Loom',
                 wistia: 'Wistia',
                 googledrive: 'Google Drive',
+                twitter: 'X (Twitter)',
                 direct: 'Video'
             };
             return names[sourceType] || 'Video';
@@ -207,6 +217,7 @@
                 loom: 'bg-purple-500',
                 wistia: 'bg-cyan-500',
                 googledrive: 'bg-green-600',
+                twitter: 'bg-black',
                 direct: 'bg-gray-500'
             };
             return colors[sourceType] || 'bg-gray-500';
@@ -411,6 +422,11 @@
                     <path d="M4.433 22.396l4-6.93H24l-4 6.93H4.433zm3.566-6.93L0 3.396h8L16 15.466H8zm8-12.07h8l-8 13.86-4-6.93 4-6.93z"/>
                 </svg>
             ),
+            Twitter: () => (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.648l-5.195-6.791-5.946 6.791H2.88l7.73-8.835L1.08 2.25h6.82l4.7 6.23 5.644-6.23zM17.15 18.75h1.828L5.293 4.12H3.32L17.15 18.75z"/>
+                </svg>
+            ),
             VideoFile: () => (
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -465,6 +481,7 @@
                 loom: Icons.Loom,
                 wistia: Icons.Wistia,
                 googledrive: Icons.GoogleDrive,
+                twitter: Icons.Twitter,
                 direct: Icons.VideoFile
             };
             const Icon = iconMap[sourceType] || Icons.VideoFile;
@@ -1533,6 +1550,82 @@ Only return the JSON object, no other text.`;
             );
         };
 
+        // Twitter/X Player Adapter (iframe-based, limited controls)
+        const TwitterPlayerAdapter = ({ sourceId, onTimeUpdate, playerRef, onWatchTime }) => {
+            const [showWarning, setShowWarning] = useState(true);
+            const iframeRef = useRef(null);
+
+            useEffect(() => {
+                if (!sourceId) return;
+
+                // Twitter embeds don't have a player API
+                // We can only embed and watch, no programmatic control
+                playerRef.current = {
+                    getCurrentTime: () => {
+                        console.warn('Twitter player does not support getCurrentTime');
+                        return 0;
+                    },
+                    seekTo: (seconds) => {
+                        console.warn('Twitter player does not support programmatic seeking');
+                    },
+                    destroy: () => {
+                        // No cleanup needed for iframe
+                    },
+                    _isTwitter: true,
+                    _limited: true
+                };
+
+                return () => {
+                    playerRef.current = null;
+                };
+            }, [sourceId]);
+
+            if (!sourceId) {
+                return (
+                    <div className="w-full h-full bg-gray-800 rounded-lg flex items-center justify-center">
+                        <div className="text-center text-gray-400">
+                            <Icons.Bookmark />
+                            <p className="mt-2">Select a video or add a new bookmark</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="w-full h-full relative rounded-lg overflow-hidden">
+                    {showWarning && (
+                        <div className="absolute top-2 left-2 right-2 z-10 bg-yellow-500/90 text-yellow-900 px-3 py-2 rounded-lg text-sm flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Icons.AlertCircle />
+                                <span>X (Twitter) videos have limited controls - timestamp seeking is not available</span>
+                            </div>
+                            <button
+                                onClick={() => setShowWarning(false)}
+                                className="hover:text-yellow-700"
+                            >
+                                <Icons.X />
+                            </button>
+                        </div>
+                    )}
+                    {/* Twitter embed container - crops to show only video, hiding tweet UI */}
+                    <div className="w-full h-full overflow-hidden">
+                        <iframe
+                            ref={iframeRef}
+                            src={`https://platform.twitter.com/embed/Tweet.html?id=${sourceId}`}
+                            frameBorder="0"
+                            allowFullScreen
+                            className="w-full"
+                            style={{
+                                height: '200%',
+                                marginTop: '-25%'
+                            }}
+                            allow="autoplay"
+                        />
+                    </div>
+                </div>
+            );
+        };
+
         // Unified Video Player Wrapper
         const VideoPlayer = ({ video, onTimeUpdate, playerRef, onWatchTime }) => {
             if (!video) {
@@ -1590,6 +1683,15 @@ Only return the JSON object, no other text.`;
                 case 'googledrive':
                     return (
                         <GoogleDrivePlayerAdapter
+                            sourceId={sourceId}
+                            onTimeUpdate={onTimeUpdate}
+                            playerRef={playerRef}
+                            onWatchTime={onWatchTime}
+                        />
+                    );
+                case 'twitter':
+                    return (
+                        <TwitterPlayerAdapter
                             sourceId={sourceId}
                             onTimeUpdate={onTimeUpdate}
                             playerRef={playerRef}
@@ -1791,6 +1893,9 @@ Only return the JSON object, no other text.`;
                     return `https://cdn.loom.com/sessions/thumbnails/${sourceId}-with-play.jpg`;
                 case 'googledrive':
                     // Google Drive doesn't provide public thumbnails
+                    return video.thumbnail || '';
+                case 'twitter':
+                    // Twitter doesn't provide public thumbnails
                     return video.thumbnail || '';
                 case 'wistia':
                     // Wistia thumbnails require API call, use placeholder if not stored
@@ -2263,6 +2368,23 @@ Only return the JSON object, no other text.`;
                         // Loom doesn't have a public oEmbed API, set title from URL
                         setTitle(`Loom Video ${parsedSource.sourceId}`);
                         setThumbnail(`https://cdn.loom.com/sessions/thumbnails/${parsedSource.sourceId}-with-play.jpg`);
+                    } else if (parsedSource.sourceType === 'twitter') {
+                        // Use Twitter oEmbed API
+                        try {
+                            const response = await fetch(
+                                `https://publish.twitter.com/oembed?url=${encodeURIComponent(parsedSource.sourceUrl)}&omit_script=true`
+                            );
+                            if (response.ok) {
+                                const data = await response.json();
+                                const authorName = data.author_name || 'Tweet';
+                                setTitle(data.author_name ? `Tweet by @${data.author_name}` : 'Twitter Video');
+                            } else {
+                                setTitle('X (Twitter) Video');
+                            }
+                        } catch (e) {
+                            console.log('Could not fetch Twitter metadata');
+                            setTitle('X (Twitter) Video');
+                        }
                     } else if (parsedSource.sourceType === 'direct') {
                         // For direct videos, extract filename from URL
                         const urlParts = parsedSource.sourceUrl.split('/');
@@ -2301,7 +2423,7 @@ Only return the JSON object, no other text.`;
                 // Use new parseVideoUrl for validation
                 const parsed = parseVideoUrl(url);
                 if (!parsed) {
-                    setError('Invalid video URL. Supported: YouTube, Vimeo, Loom, Wistia, or direct video links (.mp4, .webm)');
+                    setError('Invalid video URL. Supported: YouTube, Vimeo, Loom, Wistia, Google Drive, X (Twitter), or direct video links (.mp4, .webm)');
                     return;
                 }
 
@@ -2417,7 +2539,7 @@ Only return the JSON object, no other text.`;
                                 {detectedSource && !error && (
                                     <div className="flex items-center gap-2 mt-2">
                                         <VideoSourceBadge sourceType={detectedSource.sourceType} />
-                                        {detectedSource.sourceType === 'loom' && (
+                                        {(detectedSource.sourceType === 'loom' || detectedSource.sourceType === 'twitter' || detectedSource.sourceType === 'googledrive') && (
                                             <span className="text-yellow-400 text-xs flex items-center gap-1">
                                                 <Icons.AlertCircle />
                                                 Limited playback control
@@ -6503,6 +6625,7 @@ Third subtitle text`}
                         case 'loom': return `https://www.loom.com/share/${id}`;
                         case 'googledrive': return `https://drive.google.com/file/d/${id}/view`;
                         case 'wistia': return `https://home.wistia.com/medias/${id}`;
+                        case 'twitter': return video.sourceUrl || `https://x.com/i/status/${id}`;
                         case 'direct': return video.sourceUrl;
                         case 'youtube':
                         default: return `https://youtube.com/watch?v=${id}`;

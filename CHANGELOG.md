@@ -20,6 +20,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Files Modified
 - `transcript-server.js` — `getAdminStats()` updated to return `lastLogin` and `videos`
 - `app.html` — `AdminDashboard` component updated with new column, helpers, and expand panel
+## [3.3.0] - 2026-03-04
+
+### Added
+- **X (Twitter) Video Support**: Users can now bookmark and annotate tweets containing videos
+  - URL pattern recognition for Twitter/X URLs (`twitter.com` and `x.com` domains)
+  - Tweet metadata fetching via Twitter oEmbed API (author name, etc.)
+  - iframe-based embed player with platform.twitter.com
+  - X badge with Twitter X logo icon in library and video cards
+  - Warning banner about limited playback controls (no seeking, no timestamp support)
+  - Full integration with existing features: notes, categories, tags, sharing, markdown export
+- **TwitterPlayerAdapter component**: iframe-based player adapter for X/Twitter embeds
+
+### Files Modified
+- `app.html`: Added Twitter URL pattern parsing, TwitterPlayerAdapter component, metadata fetching, player switching, and badge support
 
 ## [3.2.1] - 2026-02-22
 

@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Dark BG: Slate (#0f172a)
 
 **Key Features:**
-- **Multi-Source Video Support**: Bookmark videos from YouTube, Vimeo, Loom, Wistia, Google Drive, or direct URLs (.mp4, .webm)
+- **Multi-Source Video Support**: Bookmark videos from YouTube, Vimeo, Loom, Wistia, Google Drive, X (Twitter), or direct URLs (.mp4, .webm)
 - Add timestamped notes during video playback
 - Organize videos into custom categories
 - Tag videos with keywords
@@ -60,7 +60,7 @@ The app is a **single HTML file** (`app.html`) with React components embedded us
      id, title, category, tags, notes: [Note],
      publishDate, thumbnail, description, viewCount, lastWatchedAt,
      // Multi-source fields
-     sourceType,         // 'youtube' | 'vimeo' | 'loom' | 'wistia' | 'direct'
+     sourceType,         // 'youtube' | 'vimeo' | 'loom' | 'wistia' | 'googledrive' | 'twitter' | 'direct'
      sourceId,           // Platform-specific video ID
      sourceUrl,          // Original URL (needed for direct videos)
      videoId,            // Deprecated, kept for backward compatibility (YouTube only)
@@ -103,6 +103,7 @@ The app is a **single HTML file** (`app.html`) with React components embedded us
     - WistiaPlayerAdapter (Wistia JS API)
     - LoomPlayerAdapter (iframe embed, limited controls)
     - GoogleDrivePlayerAdapter (iframe embed, limited controls)
+    - TwitterPlayerAdapter (iframe embed, limited controls)
     - HTML5PlayerAdapter (native `<video>` for direct URLs)
   - VideoCard (grid view thumbnail with view count and notes count)
   - VideoListItem (list view row with metadata)
@@ -222,6 +223,34 @@ When the app loads:
 - CORS is set to `*` (allows all origins)
 - If YouTube API key has HTTP referrer restrictions in Google Cloud Console, add `clipmark.top/*`
 
+## Running Locally
+
+### With Backend Server (Full Features)
+1. `npm install` — Install dependencies
+2. Create `.env` file (copy from `.env.example`) and add your API keys:
+   - `GEMINI_API_KEY` — Optional, for AI summaries and note enhancement
+   - `YOUTUBE_API_KEY` — Optional, for video metadata fetching
+   - `RESEND_API_KEY` — Optional, for email invitations
+   - `PORT` — Defaults to 3456 if not set
+3. `node transcript-server.js` — Start the server
+4. Visit `http://localhost:3456`
+
+### Without Backend (Static Files Only)
+```bash
+python3 -m http.server 8000
+```
+Then visit `http://localhost:8000`. Features unavailable without backend:
+- User authentication and account management
+- Video sharing with other users
+- Server-side bookmarks and categories sync
+- Transcript fetching and generation
+
+### Environment Setup Details
+- All API keys are optional; the app degrades gracefully without them
+- localStorage-only mode works on a single device without server
+- YouTube transcripts and AI features require their respective API keys
+- Email sharing requires RESEND_API_KEY and ADMIN_EMAIL set
+
 ## Common Development Commands
 
 ```bash
@@ -296,9 +325,10 @@ Videos save with debouncing (500ms) to avoid excessive server requests when mult
 4. **Transcript Server**: Requires external access to YouTube; may fail in restricted networks.
 5. **Loom Player Limitations**: Loom's embed API does not support programmatic seeking or time retrieval. Timestamp notes are approximate.
 6. **Google Drive Player Limitations**: Google Drive's embed does not support programmatic seeking or time retrieval. Timestamp notes are approximate.
-7. **AI Transcription Rate Limit**: Limited to 5 AI transcription requests per hour to manage API costs.
-8. **Direct Video Seeking**: Some servers may not support seeking without proper HTTP range request headers.
-9. **Private Videos**: Vimeo/Wistia private videos require embed allowlisting to work in the player.
+7. **X (Twitter) Player Limitations**: Twitter's embed API does not support programmatic seeking or time retrieval. Timestamp notes are approximate. Embeds require JavaScript execution from platform.twitter.com.
+8. **AI Transcription Rate Limit**: Limited to 5 AI transcription requests per hour to manage API costs.
+9. **Direct Video Seeking**: Some servers may not support seeking without proper HTTP range request headers.
+10. **Private Videos**: Vimeo/Wistia private videos require embed allowlisting to work in the player.
 
 ## Documentation Requirements
 
