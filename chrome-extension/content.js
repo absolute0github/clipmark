@@ -6,6 +6,52 @@
 
   let currentVideoUrl = '';
   let buttonInjected = false;
+  let styleInjected = false;
+
+  // Inject styles with !important to beat YouTube's CSS
+  function injectStyles() {
+    if (styleInjected) return;
+    const style = document.createElement('style');
+    style.textContent = `
+      #clipmark-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        padding: 0 14px !important;
+        height: 36px !important;
+        background: #10b981 !important;
+        border: none !important;
+        border-radius: 18px !important;
+        color: #fff !important;
+        font-size: 13px !important;
+        font-family: 'Roboto', Arial, sans-serif !important;
+        font-weight: 600 !important;
+        cursor: pointer !important;
+        white-space: nowrap !important;
+        vertical-align: middle !important;
+        margin-left: 4px !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+      }
+      #clipmark-btn:hover {
+        background: #059669 !important;
+      }
+      #clipmark-btn * {
+        color: #fff !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+      }
+      #clipmark-btn .cm-icon {
+        font-size: 16px !important;
+        line-height: 1 !important;
+      }
+      #clipmark-btn.cm-saved {
+        background: #064e3b !important;
+      }
+    `;
+    document.head.appendChild(style);
+    styleInjected = true;
+  }
 
   // Format seconds to MM:SS or HH:MM:SS
   function formatTime(seconds) {
@@ -152,6 +198,7 @@
 
   // Inject the ClipMark button into YouTube's action bar
   function injectButton() {
+    injectStyles();
     // Prevent double-injection
     if (document.getElementById('clipmark-btn')) return;
 

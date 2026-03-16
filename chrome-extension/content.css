@@ -4,23 +4,25 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0 12px;
+  padding: 0 14px;
   height: 36px;
-  background: transparent;
-  border: none;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
   border-radius: 18px;
-  color: #f1f1f1;
+  color: #34d399;
   font-size: 14px;
   font-family: 'Roboto', 'Arial', sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
   white-space: nowrap;
   vertical-align: middle;
 }
 
 #clipmark-btn:hover {
-  background: rgba(16, 185, 129, 0.15);
+  background: rgba(16, 185, 129, 0.25);
+  border-color: rgba(16, 185, 129, 0.6);
+  color: #6ee7b7;
 }
 
 #clipmark-btn .cm-icon {
