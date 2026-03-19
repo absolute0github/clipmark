@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ClipMark - Save to Library",
   "description": "Quickly save YouTube videos to your ClipMark library with one click.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "icons": {
     "16": "icons/icon-16.png",
     "48": "icons/icon-48.png",
@@ -14,8 +14,6 @@
   ],
   "host_permissions": [
     "https://clipmark.top/*",
-    "http://clipmark.local/*",
-    "http://localhost:3456/*",
     "https://*.youtube.com/*"
   ],
   "action": {

@@ -282,8 +282,46 @@
     }, 1500);
   }
 
-  // MutationObserver fallback — re-inject if YouTube removes our button
+  // Inject critical styles directly into the page as a <style> tag
+  // This provides a second layer of defense if YouTube strips the content.css link
+  function ensureStyles() {
+    if (document.getElementById('clipmark-injected-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'clipmark-injected-styles';
+    style.textContent = `
+      #clipmark-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        padding: 0 12px !important;
+        height: 36px !important;
+        background: transparent !important;
+        border: none !important;
+        border-radius: 18px !important;
+        color: #f1f1f1 !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        cursor: pointer !important;
+        white-space: nowrap !important;
+        vertical-align: middle !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        position: relative !important;
+        flex-shrink: 0 !important;
+      }
+      #clipmark-btn:hover { background: rgba(16,185,129,0.15) !important; }
+      #clipmark-btn .cm-icon { font-size: 18px !important; }
+      #clipmark-btn span { display: inline !important; visibility: visible !important; opacity: 1 !important; }
+      #clipmark-btn.cm-saved { color: #10b981 !important; }
+      #clipmark-modal-overlay { z-index: 2147483647 !important; }
+      #clipmark-toast { z-index: 2147483647 !important; }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  // MutationObserver fallback — re-inject if YouTube removes our button or styles
   const observer = new MutationObserver(() => {
+    ensureStyles();
     if (window.location.href.includes('/watch') && !document.getElementById('clipmark-btn')) {
       buttonInjected = false;
       injectButton();
@@ -291,5 +329,6 @@
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
+  ensureStyles();
 
 })();

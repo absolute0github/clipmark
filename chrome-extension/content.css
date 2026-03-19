@@ -1,49 +1,93 @@
 /* ClipMark YouTube Content Script Styles */
+/* All styles use #clipmark- prefix and !important to survive YouTube's aggressive CSS */
 
+/* ===== BUTTON ===== */
 #clipmark-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 14px;
-  height: 36px;
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.4);
-  border-radius: 18px;
-  color: #34d399;
-  font-size: 14px;
-  font-family: 'Roboto', 'Arial', sans-serif;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-  vertical-align: middle;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 0 12px !important;
+  height: 36px !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 18px !important;
+  color: #f1f1f1 !important;
+  font-size: 14px !important;
+  font-family: 'Roboto', 'Arial', sans-serif !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: background 0.2s !important;
+  white-space: nowrap !important;
+  vertical-align: middle !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  line-height: 36px !important;
+  text-decoration: none !important;
+  outline: none !important;
+  min-width: auto !important;
+  max-width: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  position: relative !important;
+  overflow: visible !important;
+  flex-shrink: 0 !important;
 }
 
 #clipmark-btn:hover {
-  background: rgba(16, 185, 129, 0.25);
-  border-color: rgba(16, 185, 129, 0.6);
-  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.15) !important;
+}
+
+#clipmark-btn:active {
+  background: rgba(16, 185, 129, 0.25) !important;
 }
 
 #clipmark-btn .cm-icon {
-  font-size: 18px;
-  line-height: 1;
+  font-size: 18px !important;
+  line-height: 1 !important;
+  display: inline !important;
+}
+
+#clipmark-btn span {
+  display: inline !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  color: inherit !important;
+  font-size: inherit !important;
+  font-family: inherit !important;
 }
 
 #clipmark-btn.cm-saved {
-  color: #10b981;
+  color: #10b981 !important;
 }
 
-/* Modal overlay */
+/* Hide text on very small screens */
+@media (max-width: 700px) {
+  #clipmark-btn span:not(.cm-icon) {
+    display: none !important;
+  }
+  #clipmark-btn {
+    padding: 0 8px !important;
+  }
+}
+
+/* ===== MODAL OVERLAY ===== */
 #clipmark-modal-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 99999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: cmFadeIn 0.15s ease;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: rgba(0, 0, 0, 0.6) !important;
+  z-index: 2147483647 !important;  /* Max z-index to beat everything */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  animation: cmFadeIn 0.15s ease !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  width: 100vw !important;
+  height: 100vh !important;
 }
 
 @keyframes cmFadeIn {
@@ -51,16 +95,22 @@
   to { opacity: 1; }
 }
 
+/* ===== MODAL ===== */
 #clipmark-modal {
-  background: #1e293b;
-  border-radius: 12px;
-  padding: 20px;
-  width: 380px;
-  max-width: 90vw;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-  color: #e2e8f0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  animation: cmSlideUp 0.2s ease;
+  background: #1e293b !important;
+  border-radius: 12px !important;
+  padding: 20px !important;
+  width: 380px !important;
+  max-width: 90vw !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5) !important;
+  color: #e2e8f0 !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  animation: cmSlideUp 0.2s ease !important;
+  position: relative !important;
+  z-index: 2147483647 !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  border: 1px solid #334155 !important;
 }
 
 @keyframes cmSlideUp {
@@ -69,129 +119,157 @@
 }
 
 #clipmark-modal h3 {
-  margin: 0 0 4px;
-  font-size: 16px;
-  color: #10b981;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  margin: 0 0 4px !important;
+  padding: 0 !important;
+  font-size: 16px !important;
+  color: #10b981 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-family: inherit !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+  border: none !important;
+  background: none !important;
 }
 
 #clipmark-modal .cm-subtitle {
-  font-size: 12px;
-  color: #64748b;
-  margin-bottom: 12px;
-}
-
-#clipmark-modal textarea {
-  width: 100%;
-  min-height: 70px;
-  padding: 10px;
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  color: #e2e8f0;
-  font-size: 13px;
-  font-family: inherit;
-  resize: vertical;
-  outline: none;
-  margin-bottom: 12px;
-  box-sizing: border-box;
-}
-
-#clipmark-modal textarea:focus {
-  border-color: #10b981;
-}
-
-#clipmark-modal textarea::placeholder {
-  color: #475569;
+  font-size: 12px !important;
+  color: #64748b !important;
+  margin-bottom: 12px !important;
+  line-height: 1.4 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 #clipmark-modal .cm-timestamp {
-  font-size: 12px;
-  color: #94a3b8;
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  font-size: 12px !important;
+  color: #94a3b8 !important;
+  margin-bottom: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
 }
 
 #clipmark-modal .cm-timestamp code {
-  background: #0f172a;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #fbbf24;
+  background: #0f172a !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+  color: #fbbf24 !important;
+  font-family: 'Consolas', 'Monaco', monospace !important;
+  border: none !important;
+}
+
+#clipmark-modal textarea#clipmark-note {
+  width: 100% !important;
+  min-height: 70px !important;
+  padding: 10px !important;
+  background: #0f172a !important;
+  border: 1px solid #334155 !important;
+  border-radius: 8px !important;
+  color: #e2e8f0 !important;
+  font-size: 13px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  resize: vertical !important;
+  outline: none !important;
+  margin-bottom: 12px !important;
+  box-sizing: border-box !important;
+  line-height: 1.5 !important;
+  display: block !important;
+}
+
+#clipmark-modal textarea#clipmark-note:focus {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2) !important;
+}
+
+#clipmark-modal textarea#clipmark-note::placeholder {
+  color: #475569 !important;
 }
 
 #clipmark-modal .cm-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
+  display: flex !important;
+  gap: 8px !important;
+  justify-content: flex-end !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 #clipmark-modal .cm-btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
+  padding: 8px 16px !important;
+  border: none !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.15s !important;
+  font-family: inherit !important;
+  line-height: 1.4 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-decoration: none !important;
+  outline: none !important;
+  box-sizing: border-box !important;
 }
 
 #clipmark-modal .cm-btn-save {
-  background: #10b981;
-  color: white;
+  background: #10b981 !important;
+  color: white !important;
 }
 
 #clipmark-modal .cm-btn-save:hover {
-  background: #059669;
+  background: #059669 !important;
 }
 
 #clipmark-modal .cm-btn-cancel {
-  background: #334155;
-  color: #94a3b8;
+  background: #334155 !important;
+  color: #94a3b8 !important;
 }
 
 #clipmark-modal .cm-btn-cancel:hover {
-  background: #475569;
-  color: #e2e8f0;
+  background: #475569 !important;
+  color: #e2e8f0 !important;
 }
 
 #clipmark-modal .cm-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
 }
 
-/* Toast notification */
+/* ===== TOAST NOTIFICATION ===== */
 #clipmark-toast {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  padding: 12px 20px;
-  border-radius: 10px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  z-index: 100000;
-  animation: cmToastIn 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+  position: fixed !important;
+  bottom: 24px !important;
+  right: 24px !important;
+  padding: 12px 20px !important;
+  border-radius: 10px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  z-index: 2147483647 !important;
+  animation: cmToastIn 0.3s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.3) !important;
+  max-width: 320px !important;
+  box-sizing: border-box !important;
+  pointer-events: auto !important;
 }
 
 #clipmark-toast.success {
-  background: #064e3b;
-  color: #6ee7b7;
-  border: 1px solid #10b98140;
+  background: #064e3b !important;
+  color: #6ee7b7 !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
 }
 
 #clipmark-toast.error {
-  background: #7f1d1d;
-  color: #fca5a5;
-  border: 1px solid #ef444440;
+  background: #7f1d1d !important;
+  color: #fca5a5 !important;
+  border: 1px solid rgba(239, 68, 68, 0.25) !important;
 }
 
 @keyframes cmToastIn {
