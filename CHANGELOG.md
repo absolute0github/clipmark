@@ -4,6 +4,20 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.4.2] - 2026-04-02
+
+### Fixed
+- **Transcript fetch failing on production** — YouTube rate-limiting Railway's shared IP caused 429 errors. Added:
+  - Direct timedtext API method as first-try (no page scraping needed, lighter footprint)
+  - User-agent rotation across 5 browser profiles to reduce fingerprinting
+  - Retry with exponential backoff for 429 responses (up to 3 retries)
+  - Moved transcript cache to persistent Railway volume (was in ephemeral app dir, lost on every deploy)
+  - Extended cache duration from 7 to 30 days to reduce YouTube requests
+  - Increased rate limit delay from 2s to 3s between requests
+
+### Files Modified
+- `transcript-server.js` — transcript fetching improvements, cache persistence, retry logic
+
 ## [3.4.1] - 2026-04-02
 
 ### Fixed

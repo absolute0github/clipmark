@@ -1205,13 +1205,16 @@ function findYtDlp() {
 // File paths
 const BOOKMARKS_FILE = path.join(__dirname, 'bookmarks.json');
 const CATEGORIES_FILE = path.join(__dirname, 'categories.json');
-const TRANSCRIPT_CACHE_FILE = path.join(__dirname, 'transcript-cache.json');
+// Store transcript cache on persistent volume if available, otherwise in app dir
+const TRANSCRIPT_CACHE_FILE = process.env.RAILWAY_VOLUME_MOUNT_PATH
+    ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'data', 'transcript-cache.json')
+    : path.join(__dirname, 'transcript-cache.json');
 
-// Cache duration: 7 days in milliseconds
-const CACHE_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+// Cache duration: 30 days in milliseconds (longer cache to reduce YouTube requests)
+const CACHE_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 
 // Rate limiting: minimum delay between YouTube requests (in ms)
-const MIN_REQUEST_DELAY = 2000;
+const MIN_REQUEST_DELAY = 3000;
 let lastYouTubeRequest = 0;
 
 // Transcript cache functions
@@ -1339,6 +1342,21 @@ function parseBody(req) {
 }
 
 // Fetch URL helper
+// Rotate user agents to reduce rate limiting fingerprinting
+const USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15',
+];
+let userAgentIndex = 0;
+function getNextUserAgent() {
+    const ua = USER_AGENTS[userAgentIndex % USER_AGENTS.length];
+    userAgentIndex++;
+    return ua;
+}
+
 function fetchUrl(url, options = {}) {
     return new Promise((resolve, reject) => {
         const parsedUrl = new URL(url);
@@ -1349,7 +1367,7 @@ function fetchUrl(url, options = {}) {
             path: parsedUrl.pathname + parsedUrl.search,
             method: options.method || 'GET',
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'User-Agent': getNextUserAgent(),
                 'Accept-Language': 'en-US,en;q=0.9',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 ...options.headers
@@ -1378,6 +1396,19 @@ function fetchUrl(url, options = {}) {
         }
         req.end();
     });
+}
+
+// Fetch with retry and exponential backoff for 429 responses
+async function fetchUrlWithRetry(url, options = {}, maxRetries = 3) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const response = await fetchUrl(url, options);
+        if (response.status !== 429 || attempt === maxRetries) {
+            return response;
+        }
+        const delay = Math.min(2000 * Math.pow(2, attempt), 10000);
+        console.log(`⏳ Got 429, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+    }
 }
 
 // Decode HTML entities
@@ -1505,7 +1536,7 @@ async function getTranscriptInnertube(videoId) {
 
     // First, get the page to extract necessary tokens and cookies
     const pageUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    const pageResponse = await fetchUrl(pageUrl);
+    const pageResponse = await fetchUrlWithRetry(pageUrl);
 
     if (pageResponse.status !== 200) {
         throw new Error(`Failed to fetch YouTube page: ${pageResponse.status}`);
@@ -1728,6 +1759,33 @@ function parseTranscriptData(data) {
     return [];
 }
 
+// Direct timedtext API method - doesn't require page scraping
+async function getTranscriptTimedText(videoId) {
+    console.log('Trying direct timedtext API...');
+    const langs = ['en', 'en-US', 'en-GB', 'a.en'];
+
+    for (const lang of langs) {
+        for (const fmt of ['json3', 'srv3', '']) {
+            const fmtParam = fmt ? `&fmt=${fmt}` : '';
+            const url = `https://www.youtube.com/api/timedtext?v=${videoId}&lang=${lang}${fmtParam}`;
+
+            try {
+                const response = await fetchUrlWithRetry(url, {}, 1);
+                if (response.status === 200 && response.data.length > 50) {
+                    const transcript = parseTranscriptData(response.data);
+                    if (transcript.length > 0) {
+                        console.log(`Got ${transcript.length} segments via timedtext API (lang=${lang}, fmt=${fmt || 'default'})`);
+                        return transcript;
+                    }
+                }
+            } catch (e) {
+                // Continue to next lang/fmt combo
+            }
+        }
+    }
+    return null;
+}
+
 // Main transcript function
 async function getTranscript(videoId) {
     // Validate video ID
@@ -1744,9 +1802,21 @@ async function getTranscript(videoId) {
     // Apply rate limiting before making YouTube request
     await waitForRateLimit();
 
-    // Try yt-dlp first (more reliable, handles YouTube rate limiting better)
+    // Try direct timedtext API first (lightest, no page scraping needed)
     try {
-        console.log('Attempting yt-dlp method first...');
+        console.log('Attempting direct timedtext API first...');
+        const transcript = await getTranscriptTimedText(videoId);
+        if (transcript && transcript.length > 0) {
+            cacheTranscript(videoId, transcript);
+            return transcript;
+        }
+    } catch (e) {
+        console.log(`Direct timedtext failed: ${e.message}`);
+    }
+
+    // Try yt-dlp second (more reliable, handles YouTube rate limiting better)
+    try {
+        console.log('Attempting yt-dlp method...');
         const transcript = await getTranscriptYtDlp(videoId);
 
         // Cache the result if successful
