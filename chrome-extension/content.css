@@ -1,93 +1,180 @@
 /* ClipMark YouTube Content Script Styles */
-/* All styles use #clipmark- prefix and !important to survive YouTube's aggressive CSS */
+/* Ultra-high specificity and !important to survive YouTube's aggressive CSS */
 
 /* ===== BUTTON ===== */
-#clipmark-btn {
+#clipmark-btn[data-clipmark="button"] {
+  all: unset !important;
   display: inline-flex !important;
   align-items: center !important;
+  justify-content: center !important;
   gap: 6px !important;
   padding: 0 12px !important;
   height: 36px !important;
   background: transparent !important;
-  border: none !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
   border-radius: 18px !important;
   color: #f1f1f1 !important;
   font-size: 14px !important;
-  font-family: 'Roboto', 'Arial', sans-serif !important;
+  font-family: 'Roboto', 'YouTube Noto', sans-serif !important;
   font-weight: 500 !important;
+  font-style: normal !important;
   cursor: pointer !important;
-  transition: background 0.2s !important;
+  transition: all 0.2s ease !important;
   white-space: nowrap !important;
   vertical-align: middle !important;
-  margin: 0 !important;
+  margin: 0 0 0 8px !important;
   box-sizing: border-box !important;
-  line-height: 36px !important;
+  line-height: 1 !important;
   text-decoration: none !important;
   outline: none !important;
   min-width: auto !important;
   max-width: none !important;
+  width: auto !important;
   opacity: 1 !important;
   visibility: visible !important;
   position: relative !important;
   overflow: visible !important;
   flex-shrink: 0 !important;
+  flex-grow: 0 !important;
+  z-index: 100 !important;
+  pointer-events: auto !important;
+  user-select: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
 }
 
-#clipmark-btn:hover {
+#clipmark-btn[data-clipmark="button"]:hover {
   background: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+  transform: translateY(-1px) !important;
 }
 
-#clipmark-btn:active {
+#clipmark-btn[data-clipmark="button"]:active {
   background: rgba(16, 185, 129, 0.25) !important;
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  transform: translateY(0) !important;
 }
 
-#clipmark-btn .cm-icon {
+#clipmark-btn[data-clipmark="button"]:focus {
+  outline: 2px solid rgba(16, 185, 129, 0.4) !important;
+  outline-offset: 2px !important;
+}
+
+#clipmark-btn[data-clipmark="button"] .cm-icon {
+  all: unset !important;
   font-size: 18px !important;
   line-height: 1 !important;
   display: inline !important;
+  color: inherit !important;
+  font-style: normal !important;
+  font-weight: normal !important;
+  text-decoration: none !important;
+  vertical-align: baseline !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
-#clipmark-btn span {
+#clipmark-btn[data-clipmark="button"] span:not(.cm-icon) {
+  all: unset !important;
   display: inline !important;
   visibility: visible !important;
   opacity: 1 !important;
   color: inherit !important;
   font-size: inherit !important;
   font-family: inherit !important;
+  font-weight: inherit !important;
+  font-style: normal !important;
+  text-decoration: none !important;
+  vertical-align: baseline !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
+  line-height: inherit !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+  text-shadow: none !important;
+  text-align: left !important;
 }
 
-#clipmark-btn.cm-saved {
+#clipmark-btn[data-clipmark="button"].cm-saved {
   color: #10b981 !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+  background: rgba(16, 185, 129, 0.05) !important;
 }
 
-/* Hide text on very small screens */
-@media (max-width: 700px) {
-  #clipmark-btn span:not(.cm-icon) {
+#clipmark-btn[data-clipmark="button"].cm-saved:hover {
+  background: rgba(16, 185, 129, 0.1) !important;
+}
+
+/* Enhanced responsive design */
+@media (max-width: 900px) {
+  #clipmark-btn[data-clipmark="button"] span:not(.cm-icon) {
     display: none !important;
   }
-  #clipmark-btn {
+  #clipmark-btn[data-clipmark="button"] {
+    padding: 0 10px !important;
+    min-width: 36px !important;
+  }
+}
+
+@media (max-width: 600px) {
+  #clipmark-btn[data-clipmark="button"] {
     padding: 0 8px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+  }
+  #clipmark-btn[data-clipmark="button"] .cm-icon {
+    font-size: 16px !important;
+  }
+}
+
+/* YouTube mobile app responsive adjustments */
+@media (max-width: 480px) {
+  #clipmark-btn[data-clipmark="button"] {
+    height: 28px !important;
+    min-width: 28px !important;
+    padding: 0 6px !important;
+    margin-left: 4px !important;
+  }
+  #clipmark-btn[data-clipmark="button"] .cm-icon {
+    font-size: 14px !important;
   }
 }
 
 /* ===== MODAL OVERLAY ===== */
-#clipmark-modal-overlay {
+#clipmark-modal-overlay[data-clipmark="overlay"] {
+  all: unset !important;
   position: fixed !important;
   top: 0 !important;
   left: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
-  background: rgba(0, 0, 0, 0.6) !important;
+  background: rgba(0, 0, 0, 0.75) !important;
+  backdrop-filter: blur(2px) !important;
   z-index: 2147483647 !important;  /* Max z-index to beat everything */
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  animation: cmFadeIn 0.15s ease !important;
+  animation: cmFadeIn 0.2s ease !important;
   margin: 0 !important;
-  padding: 0 !important;
+  padding: 16px !important;
   border: none !important;
   width: 100vw !important;
   height: 100vh !important;
+  box-sizing: border-box !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
 }
 
 @keyframes cmFadeIn {
@@ -96,21 +183,40 @@
 }
 
 /* ===== MODAL ===== */
-#clipmark-modal {
+#clipmark-modal[data-clipmark="modal"] {
+  all: unset !important;
   background: #1e293b !important;
-  border-radius: 12px !important;
-  padding: 20px !important;
-  width: 380px !important;
-  max-width: 90vw !important;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5) !important;
+  border-radius: 16px !important;
+  padding: 24px !important;
+  width: 420px !important;
+  max-width: calc(100vw - 32px) !important;
+  max-height: calc(100vh - 32px) !important;
+  box-shadow: 
+    0 25px 50px rgba(0,0,0,0.7),
+    0 0 0 1px rgba(255,255,255,0.1),
+    inset 0 1px 0 rgba(255,255,255,0.1) !important;
   color: #e2e8f0 !important;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-  animation: cmSlideUp 0.2s ease !important;
+  animation: cmSlideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
   position: relative !important;
   z-index: 2147483647 !important;
   box-sizing: border-box !important;
   margin: 0 !important;
-  border: 1px solid #334155 !important;
+  border: 1px solid #475569 !important;
+  display: block !important;
+  overflow: visible !important;
+  text-align: left !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  font-weight: normal !important;
+  font-style: normal !important;
+  text-decoration: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+  white-space: normal !important;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
 @keyframes cmSlideUp {
@@ -118,146 +224,243 @@
   to { transform: translateY(0); opacity: 1; }
 }
 
-#clipmark-modal h3 {
-  margin: 0 0 4px !important;
-  padding: 0 !important;
-  font-size: 16px !important;
-  color: #10b981 !important;
+#clipmark-modal[data-clipmark="modal"] h3 {
+  all: unset !important;
   display: flex !important;
   align-items: center !important;
-  gap: 6px !important;
-  font-family: inherit !important;
+  gap: 8px !important;
+  margin: 0 0 8px !important;
+  padding: 0 !important;
+  font-size: 18px !important;
+  color: #10b981 !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
   font-weight: 600 !important;
-  line-height: 1.4 !important;
-  border: none !important;
-  background: none !important;
+  line-height: 1.3 !important;
+  text-decoration: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+  white-space: normal !important;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
-#clipmark-modal .cm-subtitle {
-  font-size: 12px !important;
+#clipmark-modal[data-clipmark="modal"] .cm-subtitle {
+  all: unset !important;
+  display: block !important;
+  font-size: 13px !important;
   color: #64748b !important;
-  margin-bottom: 12px !important;
+  margin: 0 0 16px !important;
+  padding: 0 !important;
   line-height: 1.4 !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
+  font-family: inherit !important;
+  font-weight: normal !important;
+  font-style: normal !important;
+  text-decoration: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
 }
 
-#clipmark-modal .cm-timestamp {
-  font-size: 12px !important;
-  color: #94a3b8 !important;
-  margin-bottom: 12px !important;
+#clipmark-modal[data-clipmark="modal"] .cm-timestamp {
+  all: unset !important;
   display: flex !important;
   align-items: center !important;
-  gap: 4px !important;
+  gap: 6px !important;
+  font-size: 13px !important;
+  color: #94a3b8 !important;
+  margin: 0 0 16px !important;
+  padding: 0 !important;
+  font-family: inherit !important;
+  font-weight: normal !important;
+  font-style: normal !important;
+  text-decoration: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+  line-height: 1.4 !important;
+  white-space: nowrap !important;
 }
 
-#clipmark-modal .cm-timestamp code {
+#clipmark-modal[data-clipmark="modal"] .cm-timestamp code {
+  all: unset !important;
+  display: inline !important;
   background: #0f172a !important;
-  padding: 2px 6px !important;
-  border-radius: 4px !important;
+  padding: 3px 8px !important;
+  border-radius: 6px !important;
   font-size: 12px !important;
   color: #fbbf24 !important;
-  font-family: 'Consolas', 'Monaco', monospace !important;
-  border: none !important;
+  font-family: 'SF Mono', 'Consolas', 'Monaco', 'Fira Code', monospace !important;
+  font-weight: 500 !important;
+  border: 1px solid #1e293b !important;
+  margin: 0 !important;
+  vertical-align: baseline !important;
+  text-decoration: none !important;
+  text-transform: none !important;
+  letter-spacing: 0.5px !important;
+  word-spacing: normal !important;
+  white-space: nowrap !important;
 }
 
-#clipmark-modal textarea#clipmark-note {
+#clipmark-modal[data-clipmark="modal"] textarea#clipmark-note {
+  all: unset !important;
+  display: block !important;
   width: 100% !important;
-  min-height: 70px !important;
-  padding: 10px !important;
+  min-height: 80px !important;
+  max-height: 200px !important;
+  padding: 12px !important;
   background: #0f172a !important;
   border: 1px solid #334155 !important;
   border-radius: 8px !important;
   color: #e2e8f0 !important;
-  font-size: 13px !important;
+  font-size: 14px !important;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-weight: normal !important;
+  font-style: normal !important;
   resize: vertical !important;
   outline: none !important;
-  margin-bottom: 12px !important;
+  margin: 0 0 20px !important;
   box-sizing: border-box !important;
   line-height: 1.5 !important;
-  display: block !important;
+  text-decoration: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+  white-space: pre-wrap !important;
+  overflow-y: auto !important;
+  transition: border-color 0.2s ease !important;
 }
 
-#clipmark-modal textarea#clipmark-note:focus {
+#clipmark-modal[data-clipmark="modal"] textarea#clipmark-note:focus {
   border-color: #10b981 !important;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2) !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2) !important;
 }
 
-#clipmark-modal textarea#clipmark-note::placeholder {
+#clipmark-modal[data-clipmark="modal"] textarea#clipmark-note::placeholder {
   color: #475569 !important;
+  font-style: normal !important;
+  opacity: 1 !important;
 }
 
-#clipmark-modal .cm-actions {
+#clipmark-modal[data-clipmark="modal"] .cm-actions {
+  all: unset !important;
   display: flex !important;
-  gap: 8px !important;
+  gap: 12px !important;
   justify-content: flex-end !important;
+  align-items: center !important;
   margin: 0 !important;
   padding: 0 !important;
 }
 
-#clipmark-modal .cm-btn {
-  padding: 8px 16px !important;
-  border: none !important;
-  border-radius: 8px !important;
-  font-size: 13px !important;
-  font-weight: 600 !important;
-  cursor: pointer !important;
-  transition: all 0.15s !important;
-  font-family: inherit !important;
-  line-height: 1.4 !important;
+#clipmark-modal[data-clipmark="modal"] .cm-btn {
+  all: unset !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
+  gap: 6px !important;
+  padding: 10px 20px !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  font-family: inherit !important;
+  font-style: normal !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  line-height: 1.4 !important;
   text-decoration: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+  white-space: nowrap !important;
   outline: none !important;
   box-sizing: border-box !important;
+  min-width: auto !important;
+  position: relative !important;
+  z-index: 1 !important;
+  user-select: none !important;
 }
 
-#clipmark-modal .cm-btn-save {
+#clipmark-modal[data-clipmark="modal"] .cm-btn-save {
   background: #10b981 !important;
   color: white !important;
+  border-color: #10b981 !important;
 }
 
-#clipmark-modal .cm-btn-save:hover {
+#clipmark-modal[data-clipmark="modal"] .cm-btn-save:hover {
   background: #059669 !important;
+  border-color: #059669 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
 }
 
-#clipmark-modal .cm-btn-cancel {
-  background: #334155 !important;
+#clipmark-modal[data-clipmark="modal"] .cm-btn-save:active {
+  transform: translateY(0) !important;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2) !important;
+}
+
+#clipmark-modal[data-clipmark="modal"] .cm-btn-cancel {
+  background: transparent !important;
   color: #94a3b8 !important;
+  border-color: #475569 !important;
 }
 
-#clipmark-modal .cm-btn-cancel:hover {
-  background: #475569 !important;
+#clipmark-modal[data-clipmark="modal"] .cm-btn-cancel:hover {
+  background: #334155 !important;
   color: #e2e8f0 !important;
+  border-color: #64748b !important;
 }
 
-#clipmark-modal .cm-btn:disabled {
-  opacity: 0.5 !important;
+#clipmark-modal[data-clipmark="modal"] .cm-btn:disabled {
+  opacity: 0.6 !important;
   cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
+}
+
+#clipmark-modal[data-clipmark="modal"] .cm-btn:focus {
+  outline: 2px solid rgba(16, 185, 129, 0.4) !important;
+  outline-offset: 2px !important;
 }
 
 /* ===== TOAST NOTIFICATION ===== */
-#clipmark-toast {
+#clipmark-toast[data-clipmark="toast"] {
+  all: unset !important;
   position: fixed !important;
   bottom: 24px !important;
   right: 24px !important;
-  padding: 12px 20px !important;
-  border-radius: 10px !important;
+  padding: 14px 20px !important;
+  border-radius: 12px !important;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
   font-size: 14px !important;
   font-weight: 500 !important;
   z-index: 2147483647 !important;
-  animation: cmToastIn 0.3s ease !important;
+  animation: cmToastIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) !important;
   display: flex !important;
   align-items: center !important;
-  gap: 8px !important;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.3) !important;
-  max-width: 320px !important;
+  gap: 10px !important;
+  box-shadow: 
+    0 10px 40px rgba(0,0,0,0.4),
+    0 0 0 1px rgba(255,255,255,0.1) !important;
+  max-width: 360px !important;
+  min-width: 200px !important;
   box-sizing: border-box !important;
   pointer-events: auto !important;
+  backdrop-filter: blur(10px) !important;
+  color: inherit !important;
+  line-height: 1.4 !important;
+  text-decoration: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+  white-space: nowrap !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  overflow: hidden !important;
 }
 
 #clipmark-toast.success {
@@ -280,4 +483,64 @@
 @keyframes cmToastOut {
   from { transform: translateY(0); opacity: 1; }
   to { transform: translateY(20px); opacity: 0; }
+}
+
+/* ===== MOBILE OPTIMIZATIONS ===== */
+@media (max-width: 768px) {
+  #clipmark-modal-overlay[data-clipmark="overlay"] {
+    padding: 12px !important;
+    align-items: flex-start !important;
+    padding-top: 60px !important;
+  }
+  
+  #clipmark-modal[data-clipmark="modal"] {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+  
+  #clipmark-modal[data-clipmark="modal"] h3 {
+    font-size: 16px !important;
+  }
+  
+  #clipmark-modal[data-clipmark="modal"] textarea#clipmark-note {
+    min-height: 100px !important;
+    font-size: 16px !important; /* Prevents iOS zoom */
+  }
+  
+  #clipmark-modal[data-clipmark="modal"] .cm-actions {
+    flex-direction: column-reverse !important;
+    gap: 8px !important;
+  }
+  
+  #clipmark-modal[data-clipmark="modal"] .cm-btn {
+    width: 100% !important;
+    padding: 12px 20px !important;
+  }
+  
+  #clipmark-toast[data-clipmark="toast"] {
+    bottom: 16px !important;
+    right: 16px !important;
+    left: 16px !important;
+    max-width: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  #clipmark-modal[data-clipmark="modal"] {
+    padding: 20px 16px !important;
+  }
+  
+  #clipmark-modal[data-clipmark="modal"] .cm-subtitle {
+    font-size: 12px !important;
+  }
+  
+  #clipmark-modal[data-clipmark="modal"] .cm-timestamp {
+    font-size: 12px !important;
+  }
+  
+  #clipmark-modal[data-clipmark="modal"] .cm-timestamp code {
+    font-size: 11px !important;
+    padding: 2px 6px !important;
+  }
 }
