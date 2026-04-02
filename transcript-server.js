@@ -1767,7 +1767,7 @@ async function getTranscriptViaGemini(videoId) {
     if (!GEMINI_API_KEY) return null;
     console.log('Trying Gemini API transcript extraction...');
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
     const payload = JSON.stringify({
         contents: [{
             parts: [
@@ -1788,7 +1788,7 @@ async function getTranscriptViaGemini(videoId) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: payload,
-        timeout: 60000  // Gemini needs more time to process video
+        timeout: 120000  // Gemini 2.5 needs more time to process video
     });
 
     if (response.status !== 200) {
@@ -3337,7 +3337,7 @@ const server = http.createServer(async (req, res) => {
 
             // Call Gemini API
             const geminiResponse = await fetchUrl(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3549,7 +3549,7 @@ Format your response as JSON with a "message" field explaining this, and include
 
             // Call Gemini API
             const geminiResponse = await fetchUrl(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

@@ -4,6 +4,16 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.4.3] - 2026-04-02
+
+### Fixed
+- **Transcript fetch broken on production** — Gemini `gemini-2.0-flash` model rejects `video/youtube` fileData with "Requires valid user credentials". Upgraded all Gemini calls to `gemini-2.5-flash` which properly supports YouTube video processing. Also increased Gemini timeout to 120s for the thinking model.
+- **Get Context button fallback** — Now falls back to `sourceId` when `videoId` is missing, and supports stored transcripts for non-YouTube videos.
+
+### Files Modified
+- `transcript-server.js` — Upgraded Gemini model from 2.0-flash to 2.5-flash (3 occurrences), increased timeout
+- `app.html` — Improved handleLoadContext with sourceId fallback and debug logging
+
 ## [3.4.2] - 2026-04-02
 
 ### Fixed
