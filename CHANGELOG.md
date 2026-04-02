@@ -7,16 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [3.4.2] - 2026-04-02
 
 ### Fixed
-- **Transcript fetch failing on production** — YouTube rate-limiting Railway's shared IP caused 429 errors. Root fix: added `CONSENT=YES+1` cookie to all YouTube requests, which bypasses the consent wall that Railway IPs trigger. Also added:
-  - Direct timedtext API method as first-try (no page scraping needed)
+- **Transcript fetch failing on production** — YouTube rate-limiting Railway's shared IP caused 429 errors. Added Gemini API as primary transcript method (bypasses YouTube scraping entirely). Also added:
+  - `CONSENT=YES+1` cookie to all YouTube requests
+  - Direct timedtext API method as fallback
   - User-agent rotation across 5 browser profiles
-  - Retry with exponential backoff for 429 responses (up to 3 retries)
+  - Retry with exponential backoff for 429 responses
   - Moved transcript cache to persistent Railway volume (was ephemeral, lost on every deploy)
   - Extended cache duration from 7 to 30 days
-  - Increased rate limit delay from 2s to 3s
 
 ### Files Modified
-- `transcript-server.js` — consent cookie, transcript fetching improvements, cache persistence
+- `transcript-server.js` — Gemini transcript extraction, consent cookie, cache persistence
 
 ## [3.4.1] - 2026-04-02
 
