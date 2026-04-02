@@ -1388,7 +1388,7 @@ function fetchUrl(url, options = {}) {
         });
 
         req.on('error', reject);
-        req.setTimeout(15000, () => {
+        req.setTimeout(options.timeout || 15000, () => {
             req.destroy();
             reject(new Error('Request timeout'));
         });
@@ -1761,6 +1761,69 @@ function parseTranscriptData(data) {
     return [];
 }
 
+// Gemini API method - uses Gemini to extract transcript from YouTube video
+// Completely bypasses YouTube scraping, works regardless of IP rate limits
+async function getTranscriptViaGemini(videoId) {
+    if (!GEMINI_API_KEY) return null;
+    console.log('Trying Gemini API transcript extraction...');
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const payload = JSON.stringify({
+        contents: [{
+            parts: [
+                {
+                    text: 'Extract the complete transcript from this YouTube video. Break it into segments of roughly 5-10 seconds each with accurate start timestamps. Return ONLY a raw JSON array (no markdown, no code fences) with objects: {"start": <seconds as number>, "duration": <seconds as number>, "text": "<spoken text>"}.'
+                },
+                {
+                    fileData: {
+                        mimeType: 'video/youtube',
+                        fileUri: `https://www.youtube.com/watch?v=${videoId}`
+                    }
+                }
+            ]
+        }]
+    });
+
+    const response = await fetchUrl(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        timeout: 60000  // Gemini needs more time to process video
+    });
+
+    if (response.status !== 200) {
+        console.log(`Gemini API returned ${response.status}`);
+        return null;
+    }
+
+    const data = JSON.parse(response.data);
+    let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    // Strip markdown code fences if present
+    text = text.replace(/^```json\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+
+    try {
+        const segments = JSON.parse(text);
+        if (Array.isArray(segments) && segments.length > 0) {
+            const transcript = segments.map(s => ({
+                start: parseFloat(s.start) || 0,
+                duration: parseFloat(s.duration) || 5,
+                text: String(s.text || '').trim()
+            })).filter(t => t.text);
+
+            if (transcript.length > 0) {
+                console.log(`✅ Got ${transcript.length} segments via Gemini API`);
+                return transcript;
+            }
+        }
+    } catch (e) {
+        console.log(`Gemini response parse error: ${e.message}`);
+        console.log('Raw text:', text.substring(0, 200));
+    }
+
+    return null;
+}
+
 // Direct timedtext API method - doesn't require page scraping
 async function getTranscriptTimedText(videoId) {
     console.log('Trying direct timedtext API...');
@@ -1804,7 +1867,18 @@ async function getTranscript(videoId) {
     // Apply rate limiting before making YouTube request
     await waitForRateLimit();
 
-    // Method 1: Direct timedtext API (lightest, no page scraping needed)
+    // Method 1: Gemini API (most reliable - no YouTube scraping needed)
+    try {
+        const transcript = await getTranscriptViaGemini(videoId);
+        if (transcript && transcript.length > 0) {
+            cacheTranscript(videoId, transcript);
+            return transcript;
+        }
+    } catch (e) {
+        console.log(`Gemini method failed: ${e.message}`);
+    }
+
+    // Method 2: Direct timedtext API (lightest blind attempt, no page scraping)
     try {
         console.log('Attempting direct timedtext API...');
         const transcript = await getTranscriptTimedText(videoId);
@@ -1816,7 +1890,7 @@ async function getTranscript(videoId) {
         console.log(`Direct timedtext failed: ${e.message}`);
     }
 
-    // Method 2: yt-dlp
+    // Method 3: yt-dlp
     try {
         console.log('Attempting yt-dlp method...');
         const transcript = await getTranscriptYtDlp(videoId);
