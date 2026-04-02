@@ -1852,6 +1852,9 @@ async function getTranscriptTimedText(videoId) {
 }
 
 // Main transcript function
+// Track in-progress Gemini background jobs
+const pendingGeminiJobs = new Map();
+
 async function getTranscript(videoId) {
     // Validate video ID
     if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
@@ -1867,18 +1870,7 @@ async function getTranscript(videoId) {
     // Apply rate limiting before making YouTube request
     await waitForRateLimit();
 
-    // Method 1: Gemini API (most reliable - no YouTube scraping needed)
-    try {
-        const transcript = await getTranscriptViaGemini(videoId);
-        if (transcript && transcript.length > 0) {
-            cacheTranscript(videoId, transcript);
-            return transcript;
-        }
-    } catch (e) {
-        console.log(`Gemini method failed: ${e.message}`);
-    }
-
-    // Method 2: Direct timedtext API (lightest blind attempt, no page scraping)
+    // Method 1: Direct timedtext API (fastest - no page scraping, no AI)
     try {
         console.log('Attempting direct timedtext API...');
         const transcript = await getTranscriptTimedText(videoId);
@@ -1890,35 +1882,56 @@ async function getTranscript(videoId) {
         console.log(`Direct timedtext failed: ${e.message}`);
     }
 
-    // Method 3: yt-dlp
+    // Method 2: yt-dlp (fast, uses local binary)
     try {
         console.log('Attempting yt-dlp method...');
         const transcript = await getTranscriptYtDlp(videoId);
-
-        // Cache the result if successful
         if (transcript && transcript.length > 0) {
             cacheTranscript(videoId, transcript);
             return transcript;
         }
     } catch (ytdlpError) {
         console.log(`yt-dlp method failed: ${ytdlpError.message}`);
-        console.log('Falling back to innertube method...');
     }
 
-    // Fallback to innertube method
+    // Method 3: Innertube page scraping
     try {
         const transcript = await getTranscriptInnertube(videoId);
-
-        // Cache the result if successful
         if (transcript && transcript.length > 0) {
             cacheTranscript(videoId, transcript);
+            return transcript;
         }
-
-        return transcript;
     } catch (error) {
-        console.error('Transcript error:', error.message);
-        throw error;
+        console.log(`Innertube method failed: ${error.message}`);
     }
+
+    // Method 4: Gemini API (reliable but slow for long videos)
+    // Start as background job to avoid Cloudflare 100s timeout
+    if (GEMINI_API_KEY && !pendingGeminiJobs.has(videoId)) {
+        console.log(`Starting background Gemini transcript job for ${videoId}...`);
+        const job = getTranscriptViaGemini(videoId)
+            .then(transcript => {
+                if (transcript && transcript.length > 0) {
+                    cacheTranscript(videoId, transcript);
+                    console.log(`✅ Background Gemini job completed for ${videoId}: ${transcript.length} segments`);
+                } else {
+                    console.log(`⚠️ Background Gemini job returned no segments for ${videoId}`);
+                }
+            })
+            .catch(e => {
+                console.log(`❌ Background Gemini job failed for ${videoId}: ${e.message}`);
+            })
+            .finally(() => {
+                pendingGeminiJobs.delete(videoId);
+            });
+        pendingGeminiJobs.set(videoId, job);
+
+        throw new Error('Transcript is being generated. Please try again in 30-60 seconds.');
+    } else if (pendingGeminiJobs.has(videoId)) {
+        throw new Error('Transcript is still being generated. Please try again in a few seconds.');
+    }
+
+    throw new Error('All transcript methods failed. The video may not have captions available.');
 }
 
 // Clean expired sessions and shares on startup
