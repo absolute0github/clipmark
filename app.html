@@ -664,19 +664,25 @@ Only return the JSON object, no other text.`;
             // Method 1: Try local transcript server (most reliable - no CORS issues)
             const tryLocalServer = async () => {
                 try {
-                    console.log('Trying local transcript server...');
-                    const response = await fetch(`${LOCAL_SERVER}/transcript?v=${videoId}`);
+                    const url = `${LOCAL_SERVER}/transcript?v=${videoId}`;
+                    console.log('⚡ Trying local transcript server:', url);
+                    const response = await fetch(url);
+                    console.log('⚡ Server response status:', response.status);
                     if (response.ok) {
                         const data = await response.json();
+                        console.log('⚡ Server response data:', data.transcript ? `${data.transcript.length} segments` : 'no transcript', data.error || '');
                         if (data.transcript && data.transcript.length > 0) {
                             return data.transcript;
                         }
                         if (data.error) {
                             console.log('Local server error:', data.error);
                         }
+                    } else {
+                        const errorText = await response.text();
+                        console.log('⚡ Server error response:', response.status, errorText.substring(0, 200));
                     }
                 } catch (e) {
-                    console.log('Local server not available:', e.message);
+                    console.log('⚡ Local server not available:', e.message);
                 }
                 return null;
             };
@@ -6180,8 +6186,31 @@ Third subtitle text`}
                 const video = activeSharedVideo || videos.find(v => v.id === activeVideoId);
                 if (!video) return;
 
-                // Get the YouTube video ID - shared videos use youtubeVideoId, regular videos use videoId
-                const ytVideoId = activeSharedVideo ? video.youtubeVideoId : video.videoId;
+                // Get the YouTube video ID - support both legacy videoId and new sourceId fields
+                const ytVideoId = activeSharedVideo
+                    ? video.youtubeVideoId
+                    : (video.videoId || (video.sourceType === 'youtube' ? video.sourceId : null));
+
+                console.log('⚡ handleLoadContext:', {
+                    videoId: video.videoId, sourceId: video.sourceId, sourceType: video.sourceType,
+                    resolved: ytVideoId, hasStoredTranscript: !!video.transcript
+                });
+
+                // For non-YouTube videos, use stored transcript if available
+                if (!ytVideoId && video.transcript?.segments?.length > 0) {
+                    const context = getTranscriptContext(video.transcript.segments, currentTime, contextWordCount, contextWordCount);
+                    if (context) {
+                        setNewNote(context);
+                    } else {
+                        setNewNote('[Could not find transcript at this timestamp]');
+                    }
+                    return;
+                }
+
+                if (!ytVideoId) {
+                    setNewNote('[No video ID available for transcript lookup]');
+                    return;
+                }
 
                 setIsLoadingContext(true);
 
@@ -6189,7 +6218,9 @@ Third subtitle text`}
                     // Use cached transcript or fetch new one
                     let transcript = cachedTranscript;
                     if (!transcript || cachedTranscript?.videoId !== ytVideoId) {
+                        console.log('⚡ Fetching transcript for:', ytVideoId);
                         transcript = await fetchTranscript(ytVideoId);
+                        console.log('⚡ fetchTranscript returned:', transcript ? `${transcript.length} segments` : 'null');
                         if (transcript) {
                             setCachedTranscript({ videoId: ytVideoId, data: transcript });
                             transcript = transcript;
