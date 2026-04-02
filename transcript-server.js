@@ -933,6 +933,61 @@ function writeUserWatchTime(userId, watchTime) {
     }
 }
 
+// API usage tracking per user
+function readUserApiUsage(userId) {
+    try {
+        const filePath = path.join(getUserDataDir(userId), 'api-usage.json');
+        if (fs.existsSync(filePath)) {
+            return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        }
+    } catch (e) {
+        console.error(`Error reading API usage for user ${userId}:`, e.message);
+    }
+    return { totalCalls: 0, totalInputTokens: 0, totalOutputTokens: 0, totalThinkingTokens: 0, calls: [] };
+}
+
+function writeUserApiUsage(userId, usage) {
+    try {
+        ensureUserDataDir(userId);
+        const filePath = path.join(getUserDataDir(userId), 'api-usage.json');
+        fs.writeFileSync(filePath, JSON.stringify(usage, null, 2));
+    } catch (e) {
+        console.error(`Error writing API usage for user ${userId}:`, e.message);
+    }
+}
+
+function trackApiUsage(userId, endpoint, usageMetadata) {
+    if (!userId) return;
+    const usage = readUserApiUsage(userId);
+    const inputTokens = usageMetadata?.promptTokenCount || 0;
+    const outputTokens = usageMetadata?.candidatesTokenCount || 0;
+    const thinkingTokens = usageMetadata?.thoughtsTokenCount || 0;
+
+    usage.totalCalls = (usage.totalCalls || 0) + 1;
+    usage.totalInputTokens = (usage.totalInputTokens || 0) + inputTokens;
+    usage.totalOutputTokens = (usage.totalOutputTokens || 0) + outputTokens;
+    usage.totalThinkingTokens = (usage.totalThinkingTokens || 0) + thinkingTokens;
+
+    // Keep last 100 calls for detail view
+    usage.calls = usage.calls || [];
+    usage.calls.unshift({
+        endpoint,
+        inputTokens,
+        outputTokens,
+        thinkingTokens,
+        timestamp: Date.now()
+    });
+    if (usage.calls.length > 100) usage.calls = usage.calls.slice(0, 100);
+
+    writeUserApiUsage(userId, usage);
+    console.log(`📊 API usage tracked for ${userId}: ${endpoint} — ${inputTokens} in / ${outputTokens} out`);
+}
+
+// Track system-level API calls (e.g., transcript fetches not tied to a user)
+function trackSystemApiUsage(endpoint, usageMetadata) {
+    trackApiUsage('_system', endpoint, usageMetadata);
+}
+
 // Get admin stats for all users
 function getAdminStats() {
     const users = readUsers();
@@ -941,6 +996,9 @@ function getAdminStats() {
     let totalVideos = 0;
     let totalNotes = 0;
     let totalWatchTime = 0;
+    let totalApiCalls = 0;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
 
     // Build a map of userId -> most recent session createdAt
     const lastLoginMap = {};
@@ -954,6 +1012,7 @@ function getAdminStats() {
     for (const [userId, user] of Object.entries(users)) {
         const bookmarks = readUserBookmarks(userId);
         const watchTime = readUserWatchTime(userId);
+        const apiUsage = readUserApiUsage(userId);
 
         // Calculate video and note counts
         const videoCount = bookmarks.length;
@@ -984,6 +1043,9 @@ function getAdminStats() {
         totalVideos += videoCount;
         totalNotes += noteCount;
         totalWatchTime += userWatchTime;
+        totalApiCalls += apiUsage.totalCalls || 0;
+        totalInputTokens += apiUsage.totalInputTokens || 0;
+        totalOutputTokens += apiUsage.totalOutputTokens || 0;
 
         userStats.push({
             userId,
@@ -994,6 +1056,10 @@ function getAdminStats() {
             videoCount,
             noteCount,
             watchTime: userWatchTime,
+            apiCalls: apiUsage.totalCalls || 0,
+            inputTokens: apiUsage.totalInputTokens || 0,
+            outputTokens: apiUsage.totalOutputTokens || 0,
+            recentApiCalls: (apiUsage.calls || []).slice(0, 10),
             videos
         });
     }
@@ -1001,11 +1067,17 @@ function getAdminStats() {
     // Sort by creation date (newest first)
     userStats.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
+    // Also include system-level API usage
+    const systemUsage = readUserApiUsage('_system');
+
     return {
         totalUsers: Object.keys(users).length,
         totalVideos,
         totalNotes,
         totalWatchTime,
+        totalApiCalls: totalApiCalls + (systemUsage.totalCalls || 0),
+        totalInputTokens: totalInputTokens + (systemUsage.totalInputTokens || 0),
+        totalOutputTokens: totalOutputTokens + (systemUsage.totalOutputTokens || 0),
         users: userStats
     };
 }
@@ -1798,6 +1870,9 @@ async function getTranscriptViaGemini(videoId) {
 
     const data = JSON.parse(response.data);
     let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    // Track system-level API usage for transcript fetches
+    trackSystemApiUsage('/transcript (gemini)', data.usageMetadata);
 
     // Strip markdown code fences if present
     text = text.replace(/^```json\s*/i, '').replace(/\s*```\s*$/i, '').trim();
@@ -3334,6 +3409,9 @@ const server = http.createServer(async (req, res) => {
             const geminiData = JSON.parse(geminiResponse.data);
             const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
+            // Track API usage
+            trackApiUsage(userId, '/api/gemini', geminiData.usageMetadata);
+
             console.log(`🤖 Gemini API called by user ${userId}`);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ text: responseText }));
@@ -3548,6 +3626,9 @@ Format your response as JSON with a "message" field explaining this, and include
 
             const geminiData = JSON.parse(geminiResponse.data);
             const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+            // Track API usage
+            trackApiUsage(userId, '/api/transcript/generate', geminiData.usageMetadata);
 
             // Try to parse as JSON, otherwise return raw message
             let responseObj;
