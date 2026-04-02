@@ -5532,61 +5532,73 @@ Third subtitle text`}
             };
 
             // Load user data after authentication
+            // Guard: prevent save effect from syncing to server during initial load
+            const initialLoadCompleteRef = useRef(false);
+
             const loadUserData = async (token) => {
+                initialLoadCompleteRef.current = false;
                 try {
-                    // Load categories from server
-                    const catResponse = await fetch(`${SERVER_URL}/categories`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
+                    // Fetch categories and bookmarks in parallel, set state together
+                    // to prevent the save effect from syncing an empty videos array
+                    const headers = { 'Authorization': `Bearer ${token}` };
+                    const [catResponse, bookmarksResponse, sharedResponse] = await Promise.all([
+                        fetch(`${SERVER_URL}/categories`, { headers }),
+                        fetch(`${SERVER_URL}/bookmarks`, { headers }),
+                        fetch(`${SERVER_URL}/api/shares/library`, { headers }).catch(() => null)
+                    ]);
+
+                    // Check for auth failures
+                    if (catResponse.status === 401 || bookmarksResponse.status === 401) {
+                        setShowAuthModal(true);
+                        setAuthLoading(false);
+                        return;
+                    }
+
+                    // Parse all responses before setting any state
+                    let serverCategories = null;
+                    let migratedData = null;
+                    let sharedData = null;
+
                     if (catResponse.ok) {
-                        const serverCategories = await catResponse.json();
-                        if (Array.isArray(serverCategories)) {
-                            setCategories(serverCategories);
-                            console.log('✅ Loaded categories from server:', serverCategories.length);
+                        const catData = await catResponse.json();
+                        if (Array.isArray(catData)) {
+                            serverCategories = catData;
                         }
-                    } else if (catResponse.status === 401) {
-                        // Token is invalid, show auth modal
-                        setShowAuthModal(true);
-                        setAuthLoading(false);
-                        return;
                     }
 
-                    // Load bookmarks from server
-                    const response = await fetch(`${SERVER_URL}/bookmarks`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (response.ok) {
-                        const serverData = await response.json();
+                    if (bookmarksResponse.ok) {
+                        const serverData = await bookmarksResponse.json();
                         if (Array.isArray(serverData)) {
-                            // Apply migration for multi-source video support
-                            const migratedData = migrateVideosArray(serverData);
-                            setVideos(migratedData);
-                            console.log('✅ Loaded bookmarks from server:', migratedData.length);
+                            migratedData = migrateVideosArray(serverData);
                         }
-                    } else if (response.status === 401) {
-                        // Token is invalid, show auth modal
-                        setShowAuthModal(true);
-                        setAuthLoading(false);
-                        return;
                     }
 
-                    // Load shared-with-me videos
-                    try {
-                        const sharedResponse = await fetch(`${SERVER_URL}/api/shares/library`, {
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        });
-                        if (sharedResponse.ok) {
-                            const sharedData = await sharedResponse.json();
-                            if (Array.isArray(sharedData)) {
-                                setSharedWithMe(sharedData);
-                                console.log('✅ Loaded shared videos:', sharedData.length);
-                            }
+                    if (sharedResponse && sharedResponse.ok) {
+                        const sd = await sharedResponse.json();
+                        if (Array.isArray(sd)) {
+                            sharedData = sd;
                         }
-                    } catch (e) {
-                        console.log('Could not load shared videos:', e.message);
                     }
+
+                    // Set all state together so the save effect fires only once with complete data
+                    if (serverCategories !== null) {
+                        setCategories(serverCategories);
+                        console.log('✅ Loaded categories from server:', serverCategories.length);
+                    }
+                    if (migratedData !== null) {
+                        setVideos(migratedData);
+                        console.log('✅ Loaded bookmarks from server:', migratedData.length);
+                    }
+                    if (sharedData !== null) {
+                        setSharedWithMe(sharedData);
+                        console.log('✅ Loaded shared videos:', sharedData.length);
+                    }
+
+                    // Mark initial load complete so save effect can start syncing
+                    initialLoadCompleteRef.current = true;
                 } catch (e) {
                     console.error('Error loading user data:', e.message);
+                    initialLoadCompleteRef.current = true;
                 }
             };
 
@@ -6001,8 +6013,9 @@ Third subtitle text`}
             // Debounced server sync effect for videos
             const saveTimeoutRef = useRef(null);
             useEffect(() => {
-                // Only sync when authenticated
+                // Only sync when authenticated and initial load is complete
                 if (!isAuthenticated) return;
+                if (!initialLoadCompleteRef.current) return;
 
                 // Save immediately to localStorage (backup)
                 if (videos.length > 0) {
@@ -6331,33 +6344,46 @@ Third subtitle text`}
 
                 setIsRefreshing(true);
                 try {
-                    // Try to load bookmarks from server
-                    const response = await fetch(`${SERVER_URL}/bookmarks`, {
-                        headers: { 'Authorization': `Bearer ${authToken}` }
-                    });
+                    // Fetch both in parallel, then set state together
+                    const headers = { 'Authorization': `Bearer ${authToken}` };
+                    const [response, catResponse] = await Promise.all([
+                        fetch(`${SERVER_URL}/bookmarks`, { headers }),
+                        fetch(`${SERVER_URL}/categories`, { headers })
+                    ]);
+
+                    if (response.status === 401 || catResponse.status === 401) {
+                        setShowAuthModal(true);
+                        setIsAuthenticated(false);
+                        setIsRefreshing(false);
+                        return;
+                    }
+
+                    // Parse responses before setting state
+                    let newVideos = null;
+                    let newCategories = null;
+
                     if (response.ok) {
                         const serverData = await response.json();
                         if (Array.isArray(serverData)) {
-                            // Apply migration for multi-source video support
-                            const migratedData = migrateVideosArray(serverData);
-                            setVideos(migratedData);
-                            console.log('✅ Refreshed bookmarks from server:', migratedData.length);
+                            newVideos = migrateVideosArray(serverData);
                         }
-                    } else if (response.status === 401) {
-                        setShowAuthModal(true);
-                        setIsAuthenticated(false);
                     }
 
-                    // Also refresh categories
-                    const catResponse = await fetch(`${SERVER_URL}/categories`, {
-                        headers: { 'Authorization': `Bearer ${authToken}` }
-                    });
                     if (catResponse.ok) {
                         const serverCategories = await catResponse.json();
                         if (Array.isArray(serverCategories)) {
-                            setCategories(serverCategories);
-                            console.log('✅ Refreshed categories from server:', serverCategories.length);
+                            newCategories = serverCategories;
                         }
+                    }
+
+                    // Set state together to avoid intermediate syncs
+                    if (newVideos !== null) {
+                        setVideos(newVideos);
+                        console.log('✅ Refreshed bookmarks from server:', newVideos.length);
+                    }
+                    if (newCategories !== null) {
+                        setCategories(newCategories);
+                        console.log('✅ Refreshed categories from server:', newCategories.length);
                     }
                 } catch (e) {
                     console.log('Could not refresh from server:', e.message);
