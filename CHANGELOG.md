@@ -4,6 +4,16 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.4.1] - 2026-04-02
+
+### Fixed
+- **Data loss race condition on refresh** — Loading categories and bookmarks sequentially caused the save effect to sync an empty videos array to the server if the bookmarks fetch was slow. Now both are fetched in parallel with `Promise.all` and state is set together.
+- Added `initialLoadCompleteRef` guard to prevent the save effect from syncing to the server before initial data load finishes.
+- Applied same parallel-fetch fix to the in-app refresh button handler.
+
+### Files Modified
+- `app.html` — `loadUserData()`: parallel fetch + batched state updates; save effect: `initialLoadCompleteRef` guard; `handleRefresh()`: parallel fetch + batched state updates
+
 ## [3.3.0] - 2026-03-06
 
 ### Added
