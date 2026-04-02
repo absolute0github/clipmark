@@ -7451,7 +7451,7 @@ Third subtitle text`}
 
                     <div className="flex flex-1 overflow-hidden">
                         {/* Sidebar */}
-                        <aside className={`${sidebarCollapsed ? 'w-0 overflow-hidden' : 'w-64'} bg-gray-800 border-r border-gray-700 flex flex-col shrink-0 transition-all duration-200`}>
+                        <aside className={`${sidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-64 border-r'} bg-gray-800 border-gray-700 flex flex-col shrink-0 transition-all duration-200`}>
                             {/* Search */}
                             <div className="p-4">
                                 <div className="relative">
@@ -7810,7 +7810,7 @@ Third subtitle text`}
                                     {/* Player Area */}
                                     <div className="flex-1 flex flex-col p-4 overflow-hidden">
                                         {/* Video Player - Smaller size */}
-                                        <div className="w-full max-w-3xl mx-auto shrink-0 mb-4">
+                                        <div className={`w-full ${sidebarCollapsed ? 'max-w-5xl' : 'max-w-3xl'} mx-auto shrink-0 mb-4 transition-all duration-200`}>
                                             <div className="aspect-video bg-black rounded-lg overflow-hidden">
                                                 <VideoPlayer
                                                     video={displayVideo}
@@ -7823,7 +7823,7 @@ Third subtitle text`}
 
                                         {/* Enhancement Toolbar - works for both regular and shared videos */}
                                         {displayVideo && (
-                                            <div className="w-full max-w-3xl mx-auto mb-4">
+                                            <div className={`w-full ${sidebarCollapsed ? 'max-w-5xl' : 'max-w-3xl'} mx-auto mb-4 transition-all duration-200`}>
                                                 <div className="bg-gray-800 rounded-lg px-4 py-3 flex items-center justify-between">
                                                     <div className="flex items-center gap-3">
                                                         <button
@@ -7937,7 +7937,7 @@ Third subtitle text`}
 
                                         {/* Video Info & Note Input */}
                                         {displayVideo && (
-                                            <div className="w-full max-w-3xl mx-auto flex-1 overflow-y-auto min-h-0">
+                                            <div className={`w-full ${sidebarCollapsed ? 'max-w-5xl' : 'max-w-3xl'} mx-auto flex-1 overflow-y-auto min-h-0 transition-all duration-200`}>
                                                 <div className="flex items-start justify-between mb-4">
                                                     <div>
                                                         <h2 className="text-xl font-semibold">{displayVideo.title}</h2>
