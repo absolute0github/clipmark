@@ -5367,6 +5367,7 @@ Third subtitle text`}
             const [activeVideoId, setActiveVideoId] = useState(null);
             const [activeSharedVideo, setActiveSharedVideo] = useState(null); // For viewing shared videos
             const [currentTime, setCurrentTime] = useState(0);
+            const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
             const [searchQuery, setSearchQuery] = useState('');
             const [selectedCategory, setSelectedCategory] = useState('all');
             const [sortBy, setSortBy] = useState('date-desc');
@@ -6268,6 +6269,42 @@ Third subtitle text`}
             };
 
             const activeVideo = videos.find(v => v.id === activeVideoId);
+
+            // Seek helpers for rewind/fast-forward buttons and keyboard shortcuts
+            const seekRelative = (seconds) => {
+                if (playerRef.current && playerRef.current.seekTo) {
+                    const newTime = Math.max(0, currentTime + seconds);
+                    playerRef.current.seekTo(newTime);
+                    setCurrentTime(newTime);
+                }
+            };
+
+            // Global keyboard shortcuts
+            useEffect(() => {
+                const handleKeyDown = (e) => {
+                    // Don't trigger shortcuts when typing in inputs/textareas
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+
+                    const video = activeSharedVideo || videos.find(v => v.id === activeVideoId);
+                    if (!video) return;
+
+                    switch (e.key) {
+                        case 'ArrowLeft':
+                            e.preventDefault();
+                            seekRelative(e.shiftKey ? -10 : -5);
+                            break;
+                        case 'ArrowRight':
+                            e.preventDefault();
+                            seekRelative(e.shiftKey ? 10 : 5);
+                            break;
+                        case '[':
+                            setSidebarCollapsed(prev => !prev);
+                            break;
+                    }
+                };
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, [activeVideoId, activeSharedVideo, currentTime]);
 
             // Computed video for player - either regular or shared video
             const displayVideo = activeSharedVideo ? {
@@ -7414,7 +7451,7 @@ Third subtitle text`}
 
                     <div className="flex flex-1 overflow-hidden">
                         {/* Sidebar */}
-                        <aside className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col shrink-0">
+                        <aside className={`${sidebarCollapsed ? 'w-0 overflow-hidden' : 'w-64'} bg-gray-800 border-r border-gray-700 flex flex-col shrink-0 transition-all duration-200`}>
                             {/* Search */}
                             <div className="p-4">
                                 <div className="relative">
@@ -7546,6 +7583,17 @@ Third subtitle text`}
                                 </div>
                             </div>
                         </aside>
+
+                        {/* Sidebar Toggle */}
+                        <button
+                            onClick={() => setSidebarCollapsed(prev => !prev)}
+                            className="w-6 bg-gray-800 hover:bg-gray-700 border-r border-gray-700 flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                            title={sidebarCollapsed ? 'Show sidebar ( [ )' : 'Hide sidebar ( [ )'}
+                        >
+                            <svg className={`w-4 h-4 text-gray-400 transition-transform ${sidebarCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </button>
 
                         {/* Main Content */}
                         <main className="flex-1 flex flex-col overflow-hidden">
@@ -7834,6 +7882,49 @@ Third subtitle text`}
                                                         {displayVideo.transcript && (
                                                             <TranscriptStatusBadge transcript={displayVideo.transcript} />
                                                         )}
+                                                        {/* Rewind / Fast Forward Controls */}
+                                                        <div className="flex items-center gap-1 ml-2">
+                                                            <button
+                                                                onClick={() => seekRelative(-10)}
+                                                                className="px-2 py-1.5 bg-gray-600 hover:bg-gray-500 rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
+                                                                title="Rewind 10s (Shift+←)"
+                                                            >
+                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
+                                                                </svg>
+                                                                10s
+                                                            </button>
+                                                            <button
+                                                                onClick={() => seekRelative(-5)}
+                                                                className="px-2 py-1.5 bg-gray-600 hover:bg-gray-500 rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
+                                                                title="Rewind 5s (←)"
+                                                            >
+                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                                                                </svg>
+                                                                5s
+                                                            </button>
+                                                            <button
+                                                                onClick={() => seekRelative(5)}
+                                                                className="px-2 py-1.5 bg-gray-600 hover:bg-gray-500 rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
+                                                                title="Forward 5s (→)"
+                                                            >
+                                                                5s
+                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                                                                </svg>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => seekRelative(10)}
+                                                                className="px-2 py-1.5 bg-gray-600 hover:bg-gray-500 rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
+                                                                title="Forward 10s (Shift+→)"
+                                                            >
+                                                                10s
+                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z" />
+                                                                </svg>
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                     {!apiStatus.geminiConfigured && (
                                                         <p className="text-xs text-gray-500">
