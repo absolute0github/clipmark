@@ -7897,6 +7897,7 @@ Third subtitle text`}
                                         <div className={`w-full ${sidebarCollapsed ? 'max-w-5xl' : 'max-w-3xl'} mx-auto shrink-0 mb-4 transition-all duration-200`}>
                                             <div className="aspect-video bg-black rounded-lg overflow-hidden">
                                                 <VideoPlayer
+                                                    key={displayVideo?.id || 'none'}
                                                     video={displayVideo}
                                                     onTimeUpdate={setCurrentTime}
                                                     playerRef={playerRef}
