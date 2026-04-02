@@ -1370,6 +1370,8 @@ function fetchUrl(url, options = {}) {
                 'User-Agent': getNextUserAgent(),
                 'Accept-Language': 'en-US,en;q=0.9',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                // Consent cookie bypasses YouTube's consent wall for bot-like requests
+                'Cookie': 'CONSENT=YES+1',
                 ...options.headers
             }
         };
@@ -1802,9 +1804,9 @@ async function getTranscript(videoId) {
     // Apply rate limiting before making YouTube request
     await waitForRateLimit();
 
-    // Try direct timedtext API first (lightest, no page scraping needed)
+    // Method 1: Direct timedtext API (lightest, no page scraping needed)
     try {
-        console.log('Attempting direct timedtext API first...');
+        console.log('Attempting direct timedtext API...');
         const transcript = await getTranscriptTimedText(videoId);
         if (transcript && transcript.length > 0) {
             cacheTranscript(videoId, transcript);
@@ -1814,7 +1816,7 @@ async function getTranscript(videoId) {
         console.log(`Direct timedtext failed: ${e.message}`);
     }
 
-    // Try yt-dlp second (more reliable, handles YouTube rate limiting better)
+    // Method 2: yt-dlp
     try {
         console.log('Attempting yt-dlp method...');
         const transcript = await getTranscriptYtDlp(videoId);
