@@ -1788,7 +1788,7 @@ async function getTranscriptViaGemini(videoId) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: payload,
-        timeout: 120000  // Gemini 2.5 needs more time to process video
+        timeout: 300000  // Gemini 2.5 needs up to 5 min for long videos
     });
 
     if (response.status !== 200) {
@@ -1867,46 +1867,9 @@ async function getTranscript(videoId) {
         return cached;
     }
 
-    // Apply rate limiting before making YouTube request
-    await waitForRateLimit();
-
-    // Method 1: Direct timedtext API (fastest - no page scraping, no AI)
-    try {
-        console.log('Attempting direct timedtext API...');
-        const transcript = await getTranscriptTimedText(videoId);
-        if (transcript && transcript.length > 0) {
-            cacheTranscript(videoId, transcript);
-            return transcript;
-        }
-    } catch (e) {
-        console.log(`Direct timedtext failed: ${e.message}`);
-    }
-
-    // Method 2: yt-dlp (fast, uses local binary)
-    try {
-        console.log('Attempting yt-dlp method...');
-        const transcript = await getTranscriptYtDlp(videoId);
-        if (transcript && transcript.length > 0) {
-            cacheTranscript(videoId, transcript);
-            return transcript;
-        }
-    } catch (ytdlpError) {
-        console.log(`yt-dlp method failed: ${ytdlpError.message}`);
-    }
-
-    // Method 3: Innertube page scraping
-    try {
-        const transcript = await getTranscriptInnertube(videoId);
-        if (transcript && transcript.length > 0) {
-            cacheTranscript(videoId, transcript);
-            return transcript;
-        }
-    } catch (error) {
-        console.log(`Innertube method failed: ${error.message}`);
-    }
-
-    // Method 4: Gemini API (reliable but slow for long videos)
-    // Start as background job to avoid Cloudflare 100s timeout
+    // Gemini API is the primary method — YouTube scraping doesn't work
+    // reliably from datacenter IPs (bot detection, 429 rate limiting).
+    // Start as background job to avoid Cloudflare 100s timeout on long videos.
     if (GEMINI_API_KEY && !pendingGeminiJobs.has(videoId)) {
         console.log(`Starting background Gemini transcript job for ${videoId}...`);
         const job = getTranscriptViaGemini(videoId)
