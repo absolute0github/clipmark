@@ -3463,6 +3463,19 @@ Format your response as JSON with a "message" field explaining this, and include
         return;
     }
 
+    // Diagnostic: bookmark count per user (no sensitive data)
+    if (url.pathname === '/api/debug/bookmark-counts') {
+        const users = readUsers();
+        const counts = {};
+        for (const [userId, user] of Object.entries(users)) {
+            const bookmarks = readUserBookmarks(userId);
+            counts[user.username] = { userId: userId.substring(0, 8), count: bookmarks.length };
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(counts));
+        return;
+    }
+
     // =============================================
     // PROTECTED ENDPOINTS (require authentication)
     // =============================================
@@ -3489,8 +3502,13 @@ Format your response as JSON with a "message" field explaining this, and include
             try {
                 const bookmarks = await parseBody(req);
                 if (Array.isArray(bookmarks)) {
+                    const existing = readUserBookmarks(userId);
+                    console.log(`📚 POST /bookmarks - overwriting ${existing.length} → ${bookmarks.length} bookmarks for user ${userId}`);
+                    if (bookmarks.length < existing.length) {
+                        console.warn(`⚠️ BOOKMARK COUNT DECREASED by ${existing.length - bookmarks.length} for user ${userId}`);
+                        console.warn(`⚠️ Stack trace for investigation:`, new Error().stack);
+                    }
                     writeUserBookmarks(userId, bookmarks);
-                    console.log(`📚 POST /bookmarks - saved ${bookmarks.length} bookmarks for user ${userId}`);
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: true, count: bookmarks.length }));
                 } else {
