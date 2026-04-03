@@ -5598,6 +5598,7 @@ Third subtitle text`}
             const [showAuthModal, setShowAuthModal] = useState(false);
             const [authLoading, setAuthLoading] = useState(true); // Loading auth check on startup
             const [isAdmin, setIsAdmin] = useState(false);
+            const [subscription, setSubscription] = useState(null); // { status: 'trial'|'active'|'expired', daysLeft, plan }
 
             // Admin route detection
             const isAdminRoute = window.location.pathname === '/admin' || window.location.hash === '#/admin';
@@ -5624,7 +5625,7 @@ Third subtitle text`}
                     console.warn('Could not save auth token to localStorage:', e.message);
                 }
 
-                // Check if user is admin
+                // Check admin status and subscription
                 try {
                     const checkResponse = await fetch(`${SERVER_URL}/auth/check`, {
                         headers: { 'Authorization': `Bearer ${token}` }
@@ -5632,10 +5633,14 @@ Third subtitle text`}
                     if (checkResponse.ok) {
                         const checkData = await checkResponse.json();
                         setIsAdmin(checkData.isAdmin || false);
+                        if (checkData.subscription) setSubscription(checkData.subscription);
                     }
                 } catch (e) {
                     console.log('Could not check admin status:', e.message);
                 }
+
+                // If subscription data came with auth response, use it
+                if (authData.subscription) setSubscription(authData.subscription);
 
                 // Update auth state
                 setAuthToken(token);
@@ -5809,6 +5814,19 @@ Third subtitle text`}
                 const loadData = async () => {
                     // Check for share token in URL
                     const urlParams = new URLSearchParams(window.location.search);
+
+                    // Handle Stripe checkout return
+                    const checkoutStatus = urlParams.get('checkout');
+                    if (checkoutStatus === 'success') {
+                        console.log('✅ Checkout completed successfully');
+                        // Clean URL
+                        window.history.replaceState({}, '', window.location.pathname);
+                        // Subscription status will be updated via webhook → auth/check
+                    } else if (checkoutStatus === 'cancel') {
+                        console.log('⚠️ Checkout canceled');
+                        window.history.replaceState({}, '', window.location.pathname);
+                    }
+
                     const shareToken = urlParams.get('share_token');
                     if (shareToken) {
                         console.log('🔗 Found share token in URL:', shareToken);
@@ -5894,9 +5912,10 @@ Third subtitle text`}
                                     setCurrentUser({ userId: checkData.userId, username: checkData.username });
                                     setIsAuthenticated(true);
                                     setIsAdmin(checkData.isAdmin || false);
+                                    if (checkData.subscription) setSubscription(checkData.subscription);
                                     setAuthLoading(false);
 
-                                    console.log(`✅ Authenticated as ${checkData.username}${checkData.isAdmin ? ' (Admin)' : ''}`);
+                                    console.log(`✅ Authenticated as ${checkData.username}${checkData.isAdmin ? ' (Admin)' : ''} [${checkData.subscription?.status || 'unknown'}]`);
 
                                     // Load user data
                                     await loadUserData(savedToken);
@@ -7594,6 +7613,27 @@ Third subtitle text`}
                                     </svg>
                                 </a>
                             )}
+                            {/* Subscription management */}
+                            {subscription?.status === 'active' && subscription?.stripeCustomerId && (
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            const resp = await fetch(`${SERVER_URL}/api/subscription/portal`, {
+                                                method: 'POST',
+                                                headers: { 'Authorization': `Bearer ${authToken}` }
+                                            });
+                                            const data = await resp.json();
+                                            if (data.url) window.location.href = data.url;
+                                        } catch (e) { console.error('Portal error:', e); }
+                                    }}
+                                    className="p-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg transition-colors"
+                                    title="Manage Subscription"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                    </svg>
+                                </button>
+                            )}
                             {/* User info and logout */}
                             {currentUser && (
                                 <div className="flex items-center gap-2 px-3 py-1 bg-gray-700 rounded-lg">
@@ -7641,6 +7681,83 @@ Third subtitle text`}
                         </div>
                     )}
 
+                    {/* Trial Banner */}
+                    {subscription?.status === 'trial' && (
+                        <div className="bg-gradient-to-r from-emerald-900/40 to-cyan-900/40 border-b border-emerald-700/30 px-4 py-2 flex items-center justify-between shrink-0">
+                            <div className="flex items-center gap-2">
+                                <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                <span className="text-sm text-emerald-300">
+                                    <strong>{subscription.daysLeft} day{subscription.daysLeft !== 1 ? 's' : ''}</strong> left in your free trial
+                                </span>
+                            </div>
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        const resp = await fetch(`${SERVER_URL}/api/subscription/checkout`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                                            body: JSON.stringify({ plan: 'monthly' })
+                                        });
+                                        const data = await resp.json();
+                                        if (data.url) window.location.href = data.url;
+                                    } catch (e) { console.error('Checkout error:', e); }
+                                }}
+                                className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium rounded-lg transition-colors"
+                            >
+                                Subscribe Now
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Subscription Expired Paywall */}
+                    {subscription?.status === 'expired' && (
+                        <div className="flex-1 flex items-center justify-center bg-gray-900/95 z-50">
+                            <div className="max-w-md mx-auto text-center px-6">
+                                <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto mb-6">
+                                    <svg className="w-8 h-8 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                </div>
+                                <h2 className="text-2xl font-bold text-gray-100 mb-2">Your trial has ended</h2>
+                                <p className="text-gray-400 mb-6">Subscribe to ClipMark Pro to continue using all features — unlimited videos, AI summaries, transcript context, and more.</p>
+                                <div className="flex flex-col gap-3">
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                const resp = await fetch(`${SERVER_URL}/api/subscription/checkout`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                                                    body: JSON.stringify({ plan: 'monthly' })
+                                                });
+                                                const data = await resp.json();
+                                                if (data.url) window.location.href = data.url;
+                                            } catch (e) { console.error('Checkout error:', e); }
+                                        }}
+                                        className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition-colors"
+                                    >
+                                        Subscribe — $9/month
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                const resp = await fetch(`${SERVER_URL}/api/subscription/checkout`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                                                    body: JSON.stringify({ plan: 'annual' })
+                                                });
+                                                const data = await resp.json();
+                                                if (data.url) window.location.href = data.url;
+                                            } catch (e) { console.error('Checkout error:', e); }
+                                        }}
+                                        className="w-full py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-xl transition-colors"
+                                    >
+                                        Subscribe — $97/year <span className="text-emerald-400 text-sm">(save 10%)</span>
+                                    </button>
+                                </div>
+                                <button onClick={handleLogout} className="mt-4 text-sm text-gray-500 hover:text-gray-400 transition-colors">Logout</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {subscription?.status !== 'expired' && (
                     <div className="flex flex-1 overflow-hidden">
                         {/* Sidebar */}
                         <aside className={`${sidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-64 border-r'} bg-gray-800 border-gray-700 flex flex-col shrink-0 transition-all duration-200`}>
@@ -8414,6 +8531,7 @@ Third subtitle text`}
                             )}
                         </main>
                     </div>
+                    )}
 
                     {/* Modals */}
                     <AddVideoModal

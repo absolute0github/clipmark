@@ -13,6 +13,70 @@ const { execFile } = require('child_process');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 
+// Stripe configuration
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY;
+const STRIPE_TRIAL_DAYS = parseInt(process.env.STRIPE_TRIAL_DAYS || '5');
+let stripe = null;
+let STRIPE_PRICES = { monthly: null, annual: null };
+
+if (STRIPE_SECRET_KEY) {
+    stripe = require('stripe')(STRIPE_SECRET_KEY);
+    console.log('💳 Stripe payments enabled');
+
+    // Initialize Stripe products and prices on startup
+    (async () => {
+        try {
+            // Find or create the ClipMark Pro product
+            const products = await stripe.products.list({ limit: 10 });
+            let product = products.data.find(p => p.metadata?.app === 'clipmark');
+
+            if (!product) {
+                product = await stripe.products.create({
+                    name: 'ClipMark Pro',
+                    description: 'Unlimited videos, AI summaries, transcript context, sharing, and more.',
+                    metadata: { app: 'clipmark' }
+                });
+                console.log('💳 Created Stripe product:', product.id);
+            }
+
+            // Find or create monthly price ($9/mo)
+            const prices = await stripe.prices.list({ product: product.id, active: true, limit: 10 });
+            let monthlyPrice = prices.data.find(p => p.recurring?.interval === 'month' && p.unit_amount === 900);
+            let annualPrice = prices.data.find(p => p.recurring?.interval === 'year' && p.unit_amount === 9700);
+
+            if (!monthlyPrice) {
+                monthlyPrice = await stripe.prices.create({
+                    product: product.id,
+                    unit_amount: 900,
+                    currency: 'usd',
+                    recurring: { interval: 'month' },
+                    metadata: { plan: 'monthly' }
+                });
+                console.log('💳 Created monthly price:', monthlyPrice.id);
+            }
+
+            if (!annualPrice) {
+                annualPrice = await stripe.prices.create({
+                    product: product.id,
+                    unit_amount: 9700,
+                    currency: 'usd',
+                    recurring: { interval: 'year' },
+                    metadata: { plan: 'annual' }
+                });
+                console.log('💳 Created annual price:', annualPrice.id);
+            }
+
+            STRIPE_PRICES = { monthly: monthlyPrice.id, annual: annualPrice.id };
+            console.log('💳 Stripe prices ready — monthly:', monthlyPrice.id, 'annual:', annualPrice.id);
+        } catch (e) {
+            console.error('💳 Stripe initialization error:', e.message);
+        }
+    })();
+} else {
+    console.log('💳 Stripe payments disabled (STRIPE_SECRET_KEY not set)');
+}
+
 // API Keys from environment (check that they're not placeholder values)
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes('your_')
     ? process.env.GEMINI_API_KEY
@@ -1153,6 +1217,61 @@ function ensureUserDataDir(userId) {
     return userDir;
 }
 
+// Subscription helpers
+function getUserSubscription(userId) {
+    const users = readUsers();
+    const user = users[userId];
+    if (!user) return { status: 'none' };
+
+    const sub = user.subscription || {};
+    const createdAt = user.createdAt || Date.now();
+    const trialEndsAt = sub.trialEndsAt || (createdAt + STRIPE_TRIAL_DAYS * 86400000);
+    const now = Date.now();
+
+    // Admin always has access
+    if (isAdminUser(userId)) {
+        return { status: 'active', plan: 'admin', trialEndsAt };
+    }
+
+    // Active Stripe subscription
+    if (sub.stripeStatus === 'active' || sub.stripeStatus === 'trialing') {
+        return {
+            status: 'active',
+            plan: sub.plan || 'pro',
+            stripeStatus: sub.stripeStatus,
+            stripeCustomerId: sub.stripeCustomerId,
+            stripeSubscriptionId: sub.stripeSubscriptionId,
+            currentPeriodEnd: sub.currentPeriodEnd,
+            trialEndsAt
+        };
+    }
+
+    // Within trial period (no subscription yet)
+    if (now < trialEndsAt && !sub.stripeStatus) {
+        const daysLeft = Math.ceil((trialEndsAt - now) / 86400000);
+        return {
+            status: 'trial',
+            daysLeft,
+            trialEndsAt,
+            stripeCustomerId: sub.stripeCustomerId
+        };
+    }
+
+    // Trial expired, no active subscription
+    return {
+        status: 'expired',
+        trialEndsAt,
+        stripeCustomerId: sub.stripeCustomerId
+    };
+}
+
+function updateUserSubscription(userId, subData) {
+    const users = readUsers();
+    if (!users[userId]) return false;
+    users[userId].subscription = { ...(users[userId].subscription || {}), ...subData };
+    return writeUsers(users);
+}
+
 // Read user bookmarks
 function readUserBookmarks(userId) {
     try {
@@ -2131,6 +2250,10 @@ const server = http.createServer(async (req, res) => {
                 migrateLegacyData(userId);
             }
 
+            // Set trial period
+            const trialEndsAt = Date.now() + STRIPE_TRIAL_DAYS * 86400000;
+            updateUserSubscription(userId, { trialEndsAt, trialUsed: false });
+
             // Create session
             const { token, expiresAt } = createSession(userId);
 
@@ -2139,13 +2262,15 @@ const server = http.createServer(async (req, res) => {
             // Send signup notification email (async, don't block response)
             sendSignupNotification(username, userId);
 
+            const sub = getUserSubscription(userId);
             res.writeHead(201, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
                 token,
                 userId,
                 username,
-                expiresAt
+                expiresAt,
+                subscription: sub
             }));
         } catch (e) {
             console.error('Registration error:', e.message);
@@ -2264,17 +2389,244 @@ const server = http.createServer(async (req, res) => {
         if (userId) {
             const users = readUsers();
             const user = users[userId];
+            const sub = getUserSubscription(userId);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 valid: true,
                 userId,
                 username: user?.username || 'Unknown',
-                isAdmin: isAdminUser(userId)
+                isAdmin: isAdminUser(userId),
+                subscription: sub
             }));
         } else {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ valid: false }));
         }
+        return;
+    }
+
+    // =============================================
+    // STRIPE / SUBSCRIPTION ENDPOINTS
+    // =============================================
+
+    // Get subscription status
+    if (url.pathname === '/api/subscription' && req.method === 'GET') {
+        const userId = authenticateRequest(req);
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+        const sub = getUserSubscription(userId);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(sub));
+        return;
+    }
+
+    // Create Stripe checkout session
+    if (url.pathname === '/api/subscription/checkout' && req.method === 'POST') {
+        const userId = authenticateRequest(req);
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+        if (!stripe) {
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Payments not configured' }));
+            return;
+        }
+
+        try {
+            const body = await parseBody(req);
+            const plan = body?.plan === 'annual' ? 'annual' : 'monthly';
+            const priceId = STRIPE_PRICES[plan];
+
+            if (!priceId) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Price not configured. Please try again shortly.' }));
+                return;
+            }
+
+            const users = readUsers();
+            const user = users[userId];
+            const sub = user?.subscription || {};
+            const appUrl = process.env.APP_URL || `http://localhost:${PORT}`;
+
+            // Reuse existing Stripe customer or create new one
+            let customerId = sub.stripeCustomerId;
+            if (!customerId) {
+                const customer = await stripe.customers.create({
+                    metadata: { userId, username: user.username },
+                    email: user.profile?.email || undefined
+                });
+                customerId = customer.id;
+                updateUserSubscription(userId, { stripeCustomerId: customerId });
+            }
+
+            // Create checkout session with trial
+            const sessionParams = {
+                customer: customerId,
+                payment_method_types: ['card'],
+                line_items: [{ price: priceId, quantity: 1 }],
+                mode: 'subscription',
+                success_url: `${appUrl}/app?checkout=success`,
+                cancel_url: `${appUrl}/app?checkout=cancel`,
+                metadata: { userId, plan },
+                allow_promotion_codes: true,
+            };
+
+            // Only add trial if user hasn't had one before
+            if (!sub.trialUsed) {
+                sessionParams.subscription_data = {
+                    trial_period_days: STRIPE_TRIAL_DAYS,
+                    metadata: { userId, plan }
+                };
+            }
+
+            const session = await stripe.checkout.sessions.create(sessionParams);
+
+            console.log(`💳 Checkout session created for ${user.username} (${plan}): ${session.id}`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ url: session.url, sessionId: session.id }));
+        } catch (e) {
+            console.error('Stripe checkout error:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to create checkout session' }));
+        }
+        return;
+    }
+
+    // Stripe customer portal (manage subscription)
+    if (url.pathname === '/api/subscription/portal' && req.method === 'POST') {
+        const userId = authenticateRequest(req);
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+        if (!stripe) {
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Payments not configured' }));
+            return;
+        }
+
+        try {
+            const sub = getUserSubscription(userId);
+            if (!sub.stripeCustomerId) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'No subscription found' }));
+                return;
+            }
+
+            const appUrl = process.env.APP_URL || `http://localhost:${PORT}`;
+            const session = await stripe.billingPortal.sessions.create({
+                customer: sub.stripeCustomerId,
+                return_url: `${appUrl}/app`
+            });
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ url: session.url }));
+        } catch (e) {
+            console.error('Stripe portal error:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to create portal session' }));
+        }
+        return;
+    }
+
+    // Stripe webhook
+    if (url.pathname === '/api/stripe/webhook' && req.method === 'POST') {
+        // Stripe webhooks send raw body — read it without JSON parsing
+        let rawBody = '';
+        req.on('data', chunk => rawBody += chunk);
+        await new Promise(resolve => req.on('end', resolve));
+
+        try {
+            const event = JSON.parse(rawBody);
+            console.log(`💳 Stripe webhook: ${event.type}`);
+
+            switch (event.type) {
+                case 'checkout.session.completed': {
+                    const session = event.data.object;
+                    const userId = session.metadata?.userId;
+                    if (userId && session.subscription) {
+                        const subscription = await stripe.subscriptions.retrieve(session.subscription);
+                        updateUserSubscription(userId, {
+                            stripeSubscriptionId: subscription.id,
+                            stripeCustomerId: session.customer,
+                            stripeStatus: subscription.status,
+                            plan: subscription.items.data[0]?.price?.recurring?.interval === 'year' ? 'annual' : 'monthly',
+                            currentPeriodEnd: subscription.current_period_end * 1000,
+                            trialEndsAt: subscription.trial_end ? subscription.trial_end * 1000 : undefined,
+                            trialUsed: true
+                        });
+                        console.log(`💳 Subscription activated for user ${userId}: ${subscription.status}`);
+                    }
+                    break;
+                }
+
+                case 'customer.subscription.updated': {
+                    const subscription = event.data.object;
+                    const userId = subscription.metadata?.userId;
+                    if (userId) {
+                        updateUserSubscription(userId, {
+                            stripeStatus: subscription.status,
+                            currentPeriodEnd: subscription.current_period_end * 1000,
+                            plan: subscription.items.data[0]?.price?.recurring?.interval === 'year' ? 'annual' : 'monthly'
+                        });
+                        console.log(`💳 Subscription updated for user ${userId}: ${subscription.status}`);
+                    }
+                    break;
+                }
+
+                case 'customer.subscription.deleted': {
+                    const subscription = event.data.object;
+                    const userId = subscription.metadata?.userId;
+                    if (userId) {
+                        updateUserSubscription(userId, {
+                            stripeStatus: 'canceled',
+                            stripeSubscriptionId: null
+                        });
+                        console.log(`💳 Subscription canceled for user ${userId}`);
+                    }
+                    break;
+                }
+
+                case 'invoice.payment_failed': {
+                    const invoice = event.data.object;
+                    const customerId = invoice.customer;
+                    // Find user by customer ID
+                    const users = readUsers();
+                    for (const [uid, user] of Object.entries(users)) {
+                        if (user.subscription?.stripeCustomerId === customerId) {
+                            updateUserSubscription(uid, { stripeStatus: 'past_due' });
+                            console.log(`💳 Payment failed for user ${uid}`);
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ received: true }));
+        } catch (e) {
+            console.error('Stripe webhook error:', e.message);
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e.message }));
+        }
+        return;
+    }
+
+    // Get Stripe publishable key (public endpoint)
+    if (url.pathname === '/api/stripe/config' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            publishableKey: STRIPE_PUBLISHABLE_KEY || null,
+            configured: !!stripe,
+            trialDays: STRIPE_TRIAL_DAYS
+        }));
         return;
     }
 
