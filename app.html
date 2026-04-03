@@ -5993,6 +5993,21 @@ Third subtitle text`}
                 }
 
                 try {
+                    // Safety check: don't overwrite server if it has significantly more data
+                    // This prevents stale tabs from wiping out restored/new data
+                    const checkResponse = await fetch(`${SERVER_URL}/bookmarks`, {
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    });
+                    if (checkResponse.ok) {
+                        const serverData = await checkResponse.json();
+                        if (Array.isArray(serverData) && serverData.length > videosToSave.length + 5) {
+                            console.log(`⚠️ Server has ${serverData.length} videos but client only has ${videosToSave.length}. Reloading from server to prevent data loss.`);
+                            const migratedData = migrateVideosArray(serverData);
+                            setVideos(migratedData);
+                            return;
+                        }
+                    }
+
                     const response = await fetch(`${SERVER_URL}/bookmarks`, {
                         method: 'POST',
                         headers: {
