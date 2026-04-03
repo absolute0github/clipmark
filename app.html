@@ -5152,6 +5152,26 @@ Third subtitle text`}
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
+                            <button
+                                onClick={async () => {
+                                    if (!confirm('Delete all users whose username starts with "test" and cancel their Stripe subscriptions?')) return;
+                                    try {
+                                        const resp = await fetch(`${serverUrl}/admin/purge-test-users`, {
+                                            method: 'POST',
+                                            headers: { 'Authorization': `Bearer ${authToken}` }
+                                        });
+                                        const data = await resp.json();
+                                        if (data.purged) {
+                                            alert(`Purged ${data.purged.length} test users: ${data.purged.map(u => u.username).join(', ') || 'none'}`);
+                                            window.location.reload();
+                                        }
+                                    } catch (e) { alert('Purge failed: ' + e.message); }
+                                }}
+                                className="text-[10px] text-gray-600 hover:text-red-400 transition-colors border border-gray-700 hover:border-red-500/30 px-2 py-1 rounded"
+                                title="Delete all users with usernames starting with 'test' and cancel their Stripe subscriptions"
+                            >
+                                Purge Test Users
+                            </button>
                             <span className="text-xs text-gray-500">{username}</span>
                             <a href="/" className="text-xs text-gray-400 hover:text-emerald-400 transition-colors">App</a>
                             <button onClick={onLogout} className="text-xs text-gray-500 hover:text-red-400 transition-colors">Logout</button>

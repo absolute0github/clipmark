@@ -3562,6 +3562,60 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // Purge test users (usernames starting with "test")
+    if (url.pathname === '/admin/purge-test-users' && req.method === 'POST') {
+        const adminUserId = authenticateRequest(req);
+        if (!adminUserId) { res.writeHead(401, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Auth required' })); return; }
+        if (!isAdminUser(adminUserId)) { res.writeHead(403, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Admin required' })); return; }
+
+        try {
+            const users = readUsers();
+            const purged = [];
+
+            for (const [userId, user] of Object.entries(users)) {
+                if (user.username.toLowerCase().startsWith('test')) {
+                    // Cancel Stripe subscription if exists
+                    if (stripe && user.subscription?.stripeSubscriptionId) {
+                        try {
+                            await stripe.subscriptions.cancel(user.subscription.stripeSubscriptionId);
+                            console.log(`💳 Canceled Stripe subscription for test user ${user.username}`);
+                        } catch (e) { console.log(`💳 Could not cancel subscription: ${e.message}`); }
+                    }
+                    // Delete Stripe customer if exists
+                    if (stripe && user.subscription?.stripeCustomerId) {
+                        try {
+                            await stripe.customers.del(user.subscription.stripeCustomerId);
+                            console.log(`💳 Deleted Stripe customer for test user ${user.username}`);
+                        } catch (e) { console.log(`💳 Could not delete customer: ${e.message}`); }
+                    }
+
+                    // Delete sessions
+                    deleteUserSessions(userId);
+
+                    // Delete user data directory
+                    const userDataDir = getUserDataDir(userId);
+                    if (fs.existsSync(userDataDir)) {
+                        fs.rmSync(userDataDir, { recursive: true, force: true });
+                    }
+
+                    purged.push({ userId, username: user.username });
+                    delete users[userId];
+                }
+            }
+
+            writeUsers(users);
+            console.log(`🧹 Purged ${purged.length} test users: ${purged.map(u => u.username).join(', ')}`);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, purged }));
+        } catch (e) {
+            console.error('Purge error:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e.message }));
+        }
+        return;
+    }
+
     // Delete user endpoint
     const deleteMatch = url.pathname.match(/^\/admin\/users\/([^\/]+)$/);
     if (deleteMatch && req.method === 'DELETE') {
