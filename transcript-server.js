@@ -3703,17 +3703,90 @@ Format your response as JSON with a "message" field explaining this, and include
 
         if (req.method === 'POST') {
             try {
-                const bookmarks = await parseBody(req);
-                if (Array.isArray(bookmarks)) {
+                const incoming = await parseBody(req);
+                if (Array.isArray(incoming)) {
                     const existing = readUserBookmarks(userId);
-                    console.log(`📚 POST /bookmarks - overwriting ${existing.length} → ${bookmarks.length} bookmarks for user ${userId}`);
-                    if (bookmarks.length < existing.length) {
-                        console.warn(`⚠️ BOOKMARK COUNT DECREASED by ${existing.length - bookmarks.length} for user ${userId}`);
-                        console.warn(`⚠️ Stack trace for investigation:`, new Error().stack);
+                    console.log(`📚 POST /bookmarks - merging ${incoming.length} incoming with ${existing.length} existing for user ${userId}`);
+
+                    // MERGE STRATEGY: never lose data
+                    // 1. Build a map of existing videos by ID
+                    const existingMap = new Map();
+                    for (const video of existing) {
+                        if (video.id) existingMap.set(video.id, video);
                     }
-                    writeUserBookmarks(userId, bookmarks);
+
+                    // 2. Build a map of incoming videos by ID
+                    const incomingMap = new Map();
+                    for (const video of incoming) {
+                        if (video.id) incomingMap.set(video.id, video);
+                    }
+
+                    // 3. Merge: for each video, keep the version with more notes.
+                    //    For notes within a video, union by note ID, keeping the
+                    //    version with the longest text (captures enhancements).
+                    const merged = [];
+                    const allIds = new Set([...existingMap.keys(), ...incomingMap.keys()]);
+
+                    for (const id of allIds) {
+                        const ext = existingMap.get(id);
+                        const inc = incomingMap.get(id);
+
+                        if (!inc) {
+                            // Video only on server — keep it (never delete)
+                            merged.push(ext);
+                        } else if (!ext) {
+                            // Video only in incoming — add it
+                            merged.push(inc);
+                        } else {
+                            // Video exists in both — merge notes
+                            const extNotes = ext.notes || [];
+                            const incNotes = inc.notes || [];
+                            const noteMap = new Map();
+
+                            // Start with existing notes
+                            for (const note of extNotes) {
+                                noteMap.set(note.id, note);
+                            }
+
+                            // Merge incoming notes: keep longer text, preserve favorites
+                            for (const note of incNotes) {
+                                const existing = noteMap.get(note.id);
+                                if (!existing) {
+                                    noteMap.set(note.id, note);
+                                } else {
+                                    // Keep the richer version
+                                    noteMap.set(note.id, {
+                                        ...existing,
+                                        ...note,
+                                        text: (note.text || '').length >= (existing.text || '').length ? note.text : existing.text,
+                                        favorite: note.favorite || existing.favorite
+                                    });
+                                }
+                            }
+
+                            // Use incoming video metadata (title, tags, etc.) but merged notes
+                            merged.push({
+                                ...ext,
+                                ...inc,
+                                notes: Array.from(noteMap.values()),
+                                // Keep the higher view count
+                                viewCount: Math.max(ext.viewCount || 0, inc.viewCount || 0),
+                                // Keep the most recent lastWatchedAt
+                                lastWatchedAt: (ext.lastWatchedAt || '') > (inc.lastWatchedAt || '') ? ext.lastWatchedAt : inc.lastWatchedAt
+                            });
+                        }
+                    }
+
+                    const notesBefore = existing.reduce((sum, v) => sum + (v.notes || []).length, 0);
+                    const notesAfter = merged.reduce((sum, v) => sum + (v.notes || []).length, 0);
+                    console.log(`📚 Merge result: ${existing.length} → ${merged.length} videos, ${notesBefore} → ${notesAfter} notes`);
+                    if (notesAfter < notesBefore) {
+                        console.warn(`⚠️ NOTE COUNT DECREASED after merge — this should not happen!`);
+                    }
+
+                    writeUserBookmarks(userId, merged);
                     res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ success: true, count: bookmarks.length }));
+                    res.end(JSON.stringify({ success: true, count: merged.length }));
                 } else {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: 'Expected array of bookmarks' }));
