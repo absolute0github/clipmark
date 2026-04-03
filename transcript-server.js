@@ -1070,6 +1070,66 @@ function getAdminStats() {
     // Also include system-level API usage
     const systemUsage = readUserApiUsage('_system');
 
+    // Build daily activity timeline from all API calls and note creation dates
+    const dailyActivity = {};
+    const allApiCalls = [];
+
+    // Collect all API calls from all users + system
+    for (const [uid, user] of Object.entries(users)) {
+        const usage = readUserApiUsage(uid);
+        for (const call of (usage.calls || [])) {
+            allApiCalls.push(call);
+        }
+    }
+    for (const call of (systemUsage.calls || [])) {
+        allApiCalls.push(call);
+    }
+
+    // Aggregate into daily buckets (last 30 days)
+    const now = Date.now();
+    const thirtyDaysAgo = now - 30 * 86400000;
+    for (let d = 0; d < 30; d++) {
+        const date = new Date(now - d * 86400000);
+        const key = date.toISOString().split('T')[0];
+        dailyActivity[key] = { apiCalls: 0, inputTokens: 0, outputTokens: 0, notes: 0, signups: 0 };
+    }
+
+    for (const call of allApiCalls) {
+        if (call.timestamp && call.timestamp > thirtyDaysAgo) {
+            const key = new Date(call.timestamp).toISOString().split('T')[0];
+            if (dailyActivity[key]) {
+                dailyActivity[key].apiCalls++;
+                dailyActivity[key].inputTokens += call.inputTokens || 0;
+                dailyActivity[key].outputTokens += call.outputTokens || 0;
+            }
+        }
+    }
+
+    // Count note creations per day
+    for (const user of userStats) {
+        for (const video of (user.videos || [])) {
+            for (const note of (video.notes || [])) {
+                if (note.createdAt) {
+                    const key = new Date(note.createdAt).toISOString().split('T')[0];
+                    if (dailyActivity[key]) dailyActivity[key].notes++;
+                }
+            }
+        }
+    }
+
+    // Count signups per day
+    for (const [uid, user] of Object.entries(users)) {
+        if (user.createdAt) {
+            const key = new Date(user.createdAt).toISOString().split('T')[0];
+            if (dailyActivity[key]) dailyActivity[key].signups++;
+        }
+    }
+
+    // Convert to sorted array
+    const timeline = Object.entries(dailyActivity)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, data]) => ({ date, ...data }));
+
     return {
         totalUsers: Object.keys(users).length,
         totalVideos,
@@ -1078,6 +1138,7 @@ function getAdminStats() {
         totalApiCalls: totalApiCalls + (systemUsage.totalCalls || 0),
         totalInputTokens: totalInputTokens + (systemUsage.totalInputTokens || 0),
         totalOutputTokens: totalOutputTokens + (systemUsage.totalOutputTokens || 0),
+        timeline,
         users: userStats
     };
 }
