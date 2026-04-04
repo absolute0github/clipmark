@@ -1994,6 +1994,7 @@ Only return the JSON object, no other text.`;
 
         // Video Card Component
         const VideoCard = ({ video, isActive, onClick, onDelete, onEdit, onShare, onFetchPublishDate, isFetchingDate, isShared }) => {
+            const [confirmingDeleteId, setConfirmingDeleteId] = React.useState(null);
             const thumbnailUrl = getVideoThumbnail(video);
             const sourceType = video.sourceType || 'youtube';
 
@@ -2125,6 +2126,7 @@ Only return the JSON object, no other text.`;
 
         // Video List Item Component for list view
         const VideoListItem = ({ video, isActive, onClick, onDelete, onEdit, onShare, onFetchPublishDate, isFetchingDate, isShared }) => {
+            const [confirmingDeleteId, setConfirmingDeleteId] = React.useState(null);
             const thumbnailUrl = getVideoThumbnail(video);
             const sourceType = video.sourceType || 'youtube';
 

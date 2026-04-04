@@ -2048,6 +2048,7 @@ async function getTranscriptViaGemini(videoId) {
             'Cookie': '',
             'User-Agent': 'ClipMark/1.0'
         },
+        body: payload,
         timeout: 300000  // Gemini 2.5 needs up to 5 min for long videos
     });
 
