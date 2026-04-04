@@ -680,18 +680,26 @@ Only return the JSON object, no other text.`;
                     } else {
                         const errorText = await response.text();
                         console.log('⚡ Server error response:', response.status, errorText.substring(0, 200));
-                        // Check if transcript is being generated in background
+                        // Propagate meaningful server errors to the caller
                         try {
                             const errData = JSON.parse(errorText);
-                            if (errData.error && errData.error.includes('being generated')) {
-                                throw new Error(errData.error);
+                            if (errData.error) {
+                                if (errData.error.includes('being generated') ||
+                                    errData.error.includes('No captions') ||
+                                    errData.error.includes('rate limit')) {
+                                    throw new Error(errData.error);
+                                }
                             }
                         } catch (parseErr) {
-                            if (parseErr.message.includes('being generated')) throw parseErr;
+                            if (parseErr.message.includes('being generated') ||
+                                parseErr.message.includes('No captions') ||
+                                parseErr.message.includes('rate limit')) throw parseErr;
                         }
                     }
                 } catch (e) {
                     if (e.message.includes('being generated')) throw e;
+                    if (e.message.includes('No captions')) throw e;
+                    if (e.message.includes('rate limit')) throw e;
                     console.log('⚡ Local server not available:', e.message);
                 }
                 return null;
@@ -760,6 +768,12 @@ Only return the JSON object, no other text.`;
                 return null;
             } catch (error) {
                 console.error('Transcript fetch error:', error);
+                // Re-throw server errors so handleLoadContext can display appropriate messages
+                if (error.message?.includes('being generated') ||
+                    error.message?.includes('No captions') ||
+                    error.message?.includes('rate limit')) {
+                    throw error;
+                }
                 return null;
             }
         };
