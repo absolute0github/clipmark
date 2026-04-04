@@ -6515,7 +6515,7 @@ Third subtitle text`}
                     } else if (error.message?.includes('rate limit') || error.message?.includes('empty responses')) {
                         setNewNote('[YouTube rate limited. Please try again in a few minutes.]');
                     } else if (error.message?.includes('No captions')) {
-                        setNewNote('[This video does not have captions/subtitles available]');
+                        setNewNote(`[${error.message.includes('failed after') ? error.message : 'This video does not have captions/subtitles available'}. Try uploading an SRT/VTT file instead.]`);
                     } else {
                         setNewNote('[Error loading transcript. Make sure the transcript server is running.]');
                     }

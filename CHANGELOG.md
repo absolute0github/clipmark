@@ -8,9 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - **Blank screen when clicking videos** — Added React ErrorBoundary to catch rendering crashes and show a recovery UI instead of a blank screen. Added guard to reset to library view if active video is not found in the videos array. Fixed unsafe references to `activeVideo` (which can be undefined) in share, delete, and import buttons — now uses `displayVideo` or `activeVideoId` instead.
+- **Transcript generation stuck in infinite retry loop** — When the Gemini AI transcript job failed, the server would silently retry on every subsequent "Get Context" click, forever showing "being generated" without progress. Added a failed jobs tracker: after 2 failed attempts, shows a clear error message with the failure reason and a 10-minute cooldown before allowing retry. Also added better Gemini error logging (HTTP status, safety blocks, empty responses).
 
 ### Files Modified
-- `app.html` — Added ErrorBoundary class component wrapping the App; added activeVideoId/videos guard useEffect; replaced `activeVideo` references with `displayVideo`/`activeVideoId` in video info panel buttons.
+- `app.html` — Added ErrorBoundary class component wrapping the App; added activeVideoId/videos guard useEffect; replaced `activeVideo` references with `displayVideo`/`activeVideoId` in video info panel buttons. Improved "No captions" error message to show failure details and suggest SRT/VTT upload.
+- `transcript-server.js` — Added `failedGeminiJobs` tracker with MAX_GEMINI_RETRIES (2) and 10-minute cooldown; improved Gemini API error handling (throw instead of return null, check for safety blocks and empty candidates).
 
 ## [3.4.4] - 2026-04-04
 

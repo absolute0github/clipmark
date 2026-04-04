@@ -2044,11 +2044,22 @@ async function getTranscriptViaGemini(videoId) {
     });
 
     if (response.status !== 200) {
-        console.log(`Gemini API returned ${response.status}`);
-        return null;
+        console.log(`Gemini API returned ${response.status}: ${response.data?.substring(0, 300)}`);
+        throw new Error(`Gemini API HTTP ${response.status}`);
     }
 
     const data = JSON.parse(response.data);
+
+    // Check for blocked or empty responses
+    if (data?.candidates?.[0]?.finishReason === 'SAFETY') {
+        console.log('⚠️ Gemini blocked response for safety reasons');
+        throw new Error('Gemini blocked response (safety filter)');
+    }
+    if (!data?.candidates?.length) {
+        console.log('⚠️ Gemini returned no candidates:', JSON.stringify(data).substring(0, 300));
+        throw new Error('Gemini returned no candidates');
+    }
+
     let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     // Track system-level API usage for transcript fetches
@@ -2109,6 +2120,11 @@ async function getTranscriptTimedText(videoId) {
 // Main transcript function
 // Track in-progress Gemini background jobs
 const pendingGeminiJobs = new Map();
+// Track failed Gemini jobs to prevent infinite retry loops
+// Map<videoId, { timestamp, attempts, lastError }>
+const failedGeminiJobs = new Map();
+const MAX_GEMINI_RETRIES = 2;
+const FAILED_JOB_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes before allowing retry
 
 async function getTranscript(videoId) {
     // Validate video ID
@@ -2122,22 +2138,48 @@ async function getTranscript(videoId) {
         return cached;
     }
 
+    // Check if this video recently failed — avoid infinite retry loop
+    const failedJob = failedGeminiJobs.get(videoId);
+    if (failedJob) {
+        const elapsed = Date.now() - failedJob.timestamp;
+        if (elapsed < FAILED_JOB_COOLDOWN_MS && failedJob.attempts >= MAX_GEMINI_RETRIES) {
+            const minutesLeft = Math.ceil((FAILED_JOB_COOLDOWN_MS - elapsed) / 60000);
+            throw new Error(`No captions available. AI transcription failed after ${failedJob.attempts} attempts (${failedJob.lastError}). Retry available in ${minutesLeft} min.`);
+        }
+        if (elapsed >= FAILED_JOB_COOLDOWN_MS) {
+            failedGeminiJobs.delete(videoId); // Allow retry after cooldown
+        }
+    }
+
     // Gemini API is the primary method — YouTube scraping doesn't work
     // reliably from datacenter IPs (bot detection, 429 rate limiting).
     // Start as background job to avoid Cloudflare 100s timeout on long videos.
     if (GEMINI_API_KEY && !pendingGeminiJobs.has(videoId)) {
-        console.log(`Starting background Gemini transcript job for ${videoId}...`);
+        const attemptNum = (failedJob?.attempts || 0) + 1;
+        console.log(`Starting background Gemini transcript job for ${videoId} (attempt ${attemptNum})...`);
         const job = getTranscriptViaGemini(videoId)
             .then(transcript => {
                 if (transcript && transcript.length > 0) {
                     cacheTranscript(videoId, transcript);
+                    failedGeminiJobs.delete(videoId); // Clear failure record on success
                     console.log(`✅ Background Gemini job completed for ${videoId}: ${transcript.length} segments`);
                 } else {
+                    const errMsg = 'Gemini returned no transcript segments';
                     console.log(`⚠️ Background Gemini job returned no segments for ${videoId}`);
+                    failedGeminiJobs.set(videoId, {
+                        timestamp: Date.now(),
+                        attempts: attemptNum,
+                        lastError: errMsg
+                    });
                 }
             })
             .catch(e => {
                 console.log(`❌ Background Gemini job failed for ${videoId}: ${e.message}`);
+                failedGeminiJobs.set(videoId, {
+                    timestamp: Date.now(),
+                    attempts: attemptNum,
+                    lastError: e.message.substring(0, 100)
+                });
             })
             .finally(() => {
                 pendingGeminiJobs.delete(videoId);
