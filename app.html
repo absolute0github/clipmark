@@ -5653,6 +5653,7 @@ Third subtitle text`}
             // Transcript upload modal state
             const [showTranscriptModal, setShowTranscriptModal] = useState(false);
             const [showTranscriptHelp, setShowTranscriptHelp] = useState(false);
+            const [transcriptUnavailable, setTranscriptUnavailable] = useState(false);
 
             // Backup import modal state
             const [showImportModal, setShowImportModal] = useState(false);
@@ -6515,6 +6516,7 @@ Third subtitle text`}
                     } else if (error.message?.includes('rate limit') || error.message?.includes('empty responses')) {
                         setNewNote('[YouTube rate limited. Please try again in a few minutes.]');
                     } else if (error.message?.includes('No captions')) {
+                        setTranscriptUnavailable(true);
                         setNewNote(`[${error.message.includes('failed after') ? error.message : 'This video does not have captions/subtitles available'}. Try uploading an SRT/VTT file instead.]`);
                     } else {
                         setNewNote('[Error loading transcript. Make sure the transcript server is running.]');
@@ -6692,6 +6694,7 @@ Third subtitle text`}
                 setShowLibrary(false);
                 setShowSharedWithMe(false);
                 setNoteSearch('');
+                setTranscriptUnavailable(false);
             };
 
             const handleNavigateToNote = (videoId, timestamp) => {
@@ -8005,6 +8008,7 @@ Third subtitle text`}
                                                             setActiveVideoId(null); // Clear regular video
                                                             setShowLibrary(false);
                                                             setNoteSearch('');
+                                                            setTranscriptUnavailable(false);
                                                         }}
                                                     >
                                                         <div className="relative group">
@@ -8243,8 +8247,8 @@ Third subtitle text`}
                                                             <Icons.Download />
                                                             Download .md
                                                         </button>
-                                                        {/* Show transcript upload for non-YouTube videos */}
-                                                        {(displayVideo.sourceType && displayVideo.sourceType !== 'youtube') && (
+                                                        {/* Show transcript upload for non-YouTube videos, or YouTube when captions unavailable */}
+                                                        {(displayVideo.sourceType && (displayVideo.sourceType !== 'youtube' || transcriptUnavailable)) && (
                                                             <>
                                                                 <button
                                                                     onClick={() => setShowTranscriptModal(true)}
