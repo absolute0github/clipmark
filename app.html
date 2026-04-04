@@ -818,6 +818,40 @@ Only return the JSON object, no other text.`;
             return tips;
         };
 
+        // Error Boundary to prevent blank screens on rendering errors
+        class ErrorBoundary extends React.Component {
+            constructor(props) {
+                super(props);
+                this.state = { hasError: false, error: null };
+            }
+            static getDerivedStateFromError(error) {
+                return { hasError: true, error };
+            }
+            componentDidCatch(error, errorInfo) {
+                console.error('❌ React ErrorBoundary caught:', error, errorInfo);
+            }
+            render() {
+                if (this.state.hasError) {
+                    return React.createElement('div', {
+                        className: 'flex flex-col items-center justify-center h-full bg-gray-900 text-gray-300 p-8'
+                    },
+                        React.createElement('div', { className: 'text-center max-w-md' },
+                            React.createElement('h2', { className: 'text-xl font-bold text-red-400 mb-4' }, 'Something went wrong'),
+                            React.createElement('p', { className: 'text-sm text-gray-400 mb-4' }, this.state.error?.message || 'An unexpected error occurred'),
+                            React.createElement('button', {
+                                onClick: () => {
+                                    this.setState({ hasError: false, error: null });
+                                    window.location.reload();
+                                },
+                                className: 'px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg font-medium transition-colors'
+                            }, 'Reload App')
+                        )
+                    );
+                }
+                return this.props.children;
+            }
+        }
+
         // YouTube Player Component
         const YouTubePlayer = ({ videoId, onTimeUpdate, playerRef, onWatchTime }) => {
             const [playerId] = useState(() => `yt-player-${generateId()}`);
@@ -6492,6 +6526,15 @@ Third subtitle text`}
 
             const activeVideo = videos.find(v => v.id === activeVideoId);
 
+            // Guard: if activeVideoId is set but video not found, reset to library
+            useEffect(() => {
+                if (activeVideoId && !activeSharedVideo && videos.length > 0 && !videos.find(v => v.id === activeVideoId)) {
+                    console.warn('⚠️ Active video not found in videos array, resetting to library');
+                    setActiveVideoId(null);
+                    setShowLibrary(true);
+                }
+            }, [activeVideoId, videos, activeSharedVideo]);
+
             // Apply playback speed when it changes or player loads
             useEffect(() => {
                 try { localStorage.setItem('ytBookmarks_playbackSpeed', playbackSpeed.toString()); } catch {}
@@ -8328,7 +8371,7 @@ Third subtitle text`}
                                                             <>
                                                                 <button
                                                                     onClick={() => {
-                                                                        setShareVideo(activeVideo);
+                                                                        setShareVideo(displayVideo);
                                                                         setShowShareModal(true);
                                                                     }}
                                                                     className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-blue-400"
@@ -8341,7 +8384,7 @@ Third subtitle text`}
                                                                 <button
                                                                     onClick={() => {
                                                                         if (confirm('Delete this video and all its notes?')) {
-                                                                            handleDeleteVideo(activeVideo.id);
+                                                                            handleDeleteVideo(activeVideoId);
                                                                         }
                                                                     }}
                                                                     className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-red-400"
@@ -8422,7 +8465,7 @@ Third subtitle text`}
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.2</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.5</p>
                                             </div>
                                         )}
                                     </div>
@@ -8435,7 +8478,7 @@ Third subtitle text`}
                                                 <div className="flex gap-1">
                                                     {!displayVideo.isShared && (
                                                         <button
-                                                            onClick={() => handleImportNotes(activeVideo)}
+                                                            onClick={() => handleImportNotes(displayVideo)}
                                                             className="px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded text-xs font-medium transition-colors flex items-center gap-1"
                                                             title="Import notes from text file"
                                                         >
@@ -8651,7 +8694,7 @@ Third subtitle text`}
             );
         };
 
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+        ReactDOM.createRoot(document.getElementById('root')).render(<ErrorBoundary><App /></ErrorBoundary>);
     </script>
 <script>
 // Register Service Worker for PWA support

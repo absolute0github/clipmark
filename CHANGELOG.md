@@ -4,6 +4,14 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.4.5] - 2026-04-04
+
+### Fixed
+- **Blank screen when clicking videos** — Added React ErrorBoundary to catch rendering crashes and show a recovery UI instead of a blank screen. Added guard to reset to library view if active video is not found in the videos array. Fixed unsafe references to `activeVideo` (which can be undefined) in share, delete, and import buttons — now uses `displayVideo` or `activeVideoId` instead.
+
+### Files Modified
+- `app.html` — Added ErrorBoundary class component wrapping the App; added activeVideoId/videos guard useEffect; replaced `activeVideo` references with `displayVideo`/`activeVideoId` in video info panel buttons.
+
 ## [3.4.4] - 2026-04-04
 
 ### Fixed
