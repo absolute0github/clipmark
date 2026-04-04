@@ -6464,8 +6464,8 @@ Third subtitle text`}
                     resolved: ytVideoId, hasStoredTranscript: !!video.transcript
                 });
 
-                // For non-YouTube videos, use stored transcript if available
-                if (!ytVideoId && video.transcript?.segments?.length > 0) {
+                // Use stored transcript if available (uploaded SRT/VTT takes priority over fetching)
+                if (video.transcript?.segments?.length > 0) {
                     const context = getTranscriptContext(video.transcript.segments, currentTime, contextWordCount, contextWordCount);
                     if (context) {
                         setNewNote(context);
