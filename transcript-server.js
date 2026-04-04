@@ -4315,6 +4315,34 @@ Format your response as JSON with a "message" field explaining this, and include
         }
     }
 
+    // DELETE /bookmarks/:id — remove a single video by ID
+    if (req.method === 'DELETE' && url.pathname.startsWith('/bookmarks/')) {
+        const userId = authenticateRequest(req);
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Unauthorized' }));
+            return;
+        }
+        const videoId = url.pathname.split('/bookmarks/')[1];
+        if (!videoId) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Missing video ID' }));
+            return;
+        }
+        const bookmarks = readUserBookmarks(userId);
+        const filtered = bookmarks.filter(v => v.id !== videoId);
+        if (filtered.length === bookmarks.length) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Video not found' }));
+            return;
+        }
+        writeUserBookmarks(userId, filtered);
+        console.log(`🗑️ DELETE /bookmarks/${videoId} for user ${userId}`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
+        return;
+    }
+
     // Categories API - requires authentication
     if (url.pathname === '/categories') {
         const userId = authenticateRequest(req);
