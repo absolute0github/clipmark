@@ -4,6 +4,18 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.4.6] - 2026-04-04
+
+### Changed
+- **Updated docs to reflect Hetzner migration** — CLAUDE.md and CHANGELOG.md updated to document current infrastructure
+- Fixed `deploy.sh` to remove `su - clipmark` (webhook already runs as clipmark user; self-su was hanging indefinitely and accumulating stuck processes)
+- Updated `webhook.js` deploy timeout from 60s → 120s
+
+### Files Modified
+- `CLAUDE.md` — Updated Deployment section, env vars table, Known Issues
+- `deploy.sh` — Removed chown + su, runs pm2 restart directly
+- `webhook.js` — Increased timeout to 120s
+
 ## [3.4.5] - 2026-04-04
 
 ### Fixed

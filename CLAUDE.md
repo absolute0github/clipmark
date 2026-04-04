@@ -213,29 +213,21 @@ When the app loads:
 
 **Production URL**: https://clipmark.top
 
-**Hosting**: Hetzner CX23 VPS (Helsinki), 2 vCPU, 4GB RAM
-- **Process Manager**: PM2 with systemd startup
-- **Reverse Proxy**: nginx (handles SSL termination, static files, proxies to Node.js)
-- **SSL**: Let's Encrypt (via certbot/nginx)
-- **DNS**: Cloudflare (free plan) — CNAME flattening for root domain pointing to Hetzner
+**Hosting**: Hetzner CX23 VPS (Helsinki), 2 vCPU, 4GB RAM — migrated from Railway on 2026-04-02
+- **DNS/CDN**: Cloudflare (free plan) — CNAME flattening for root domain, SSL Full (strict)
+- **SSL**: Let's Encrypt via Certbot (auto-renewing)
+- **Reverse proxy**: nginx (SSL termination, proxies to Node.js)
 - **www redirect**: Cloudflare redirect rule, `www.clipmark.top` → `clipmark.top` (301)
-- **Persistent storage**: Local disk (data/ directory)
-
-### Deploying Changes
-```bash
-# SSH into the server, pull latest code, and restart
-ssh <server>
-cd /path/to/videonote-snatch
-git pull origin main
-pm2 restart all
-```
-**Note**: Unlike Railway, Hetzner does NOT auto-deploy on git push. A GitHub webhook for auto-deploy is planned but not yet configured.
+- **Process manager**: PM2 with systemd startup
+- **Data**: JSON files in `/opt/clipmark/data/`
+- **Backups**: Daily cron at 3am UTC, 30-day retention in `/opt/clipmark/backups/`
+- **Deploy**: `git push` → webhook server triggers SSH pull + PM2 restart
 
 ### Required Environment Variables
 | Variable | Description |
 |----------|-------------|
 | `APP_URL` | `https://clipmark.top` — used for email share links |
-| `PORT` | Port for Node.js server (nginx proxies to this) |
+| `PORT` | Defaults to 3456 if not set |
 | `GEMINI_API_KEY` | For AI summaries and transcription |
 | `YOUTUBE_API_KEY` | For video metadata |
 | `RESEND_API_KEY` | Email service for invitations |
@@ -345,13 +337,15 @@ Videos save with debouncing (500ms) to avoid excessive server requests when mult
 1. **iPad Refresh Deletion**: When refreshing, localStorage might be cleared if the app is in incognito/private mode or if the browser's cache is cleared. Ensure data is synced to server for persistence.
 2. **CORS**: The app uses CORS for server communication; ensure backend has proper CORS headers.
 3. **YouTube API Quotas**: Video metadata fetching uses YouTube API quota; batching or caching recommended for many videos.
-4. **Transcript Server**: Requires external access to YouTube; may fail in restricted networks.
-5. **Loom Player Limitations**: Loom's embed API does not support programmatic seeking or time retrieval. Timestamp notes are approximate.
-6. **Google Drive Player Limitations**: Google Drive's embed does not support programmatic seeking or time retrieval. Timestamp notes are approximate.
-7. **X (Twitter) Player Limitations**: Twitter's embed API does not support programmatic seeking or time retrieval. Timestamp notes are approximate. Embeds require JavaScript execution from platform.twitter.com.
-8. **AI Transcription Rate Limit**: Limited to 5 AI transcription requests per hour to manage API costs.
-9. **Direct Video Seeking**: Some servers may not support seeking without proper HTTP range request headers.
-10. **Private Videos**: Vimeo/Wistia private videos require embed allowlisting to work in the player.
+4. **YouTube Bot Detection from Hetzner**: yt-dlp and innertube scraping fail from Hetzner datacenter IPs. Gemini API bypasses this entirely and is used as the primary transcript method.
+5. **Long Video Transcripts**: Gemini 2.5 Flash can take 2-5 minutes for 40+ minute videos. First request shows "generating" message; result is cached on retry.
+6. **Loom Player Limitations**: Loom's embed API does not support programmatic seeking or time retrieval. Timestamp notes are approximate.
+7. **Google Drive Player Limitations**: Google Drive's embed does not support programmatic seeking or time retrieval. Timestamp notes are approximate.
+8. **X (Twitter) Player Limitations**: Twitter's embed API does not support programmatic seeking or time retrieval. Timestamp notes are approximate. Embeds require JavaScript execution from platform.twitter.com.
+9. **AI Transcription Rate Limit**: Limited to 5 AI transcription requests per hour to manage API costs.
+10. **Direct Video Seeking**: Some servers may not support seeking without proper HTTP range request headers.
+11. **Private Videos**: Vimeo/Wistia private videos require embed allowlisting to work in the player.
+12. **Email Sharing**: Resend sandbox limits sends to own email only until domain is verified.
 
 ## Documentation Requirements
 
