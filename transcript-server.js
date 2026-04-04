@@ -2036,10 +2036,17 @@ async function getTranscriptViaGemini(videoId) {
         }]
     });
 
+    console.log(`📡 Calling Gemini API for video ${videoId} (payload: ${payload.length} bytes)...`);
+
     const response = await fetchUrl(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload,
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            // Override fetchUrl defaults — don't send YouTube cookies to Gemini
+            'Cookie': '',
+            'User-Agent': 'ClipMark/1.0'
+        },
         timeout: 300000  // Gemini 2.5 needs up to 5 min for long videos
     });
 
@@ -4536,6 +4543,23 @@ Format your response as JSON with a "message" field explaining this, and include
     // =============================================
     // PUBLIC ENDPOINTS (no authentication required)
     // =============================================
+
+    // Transcript job status (for debugging)
+    if (url.pathname === '/api/transcript/status') {
+        const videoId = url.searchParams.get('v');
+        const status = {
+            videoId,
+            hasCached: videoId ? !!getCachedTranscript(videoId) : false,
+            isPending: videoId ? pendingGeminiJobs.has(videoId) : false,
+            failedJob: videoId ? failedGeminiJobs.get(videoId) || null : null,
+            geminiConfigured: !!GEMINI_API_KEY,
+            totalPendingJobs: pendingGeminiJobs.size,
+            totalFailedJobs: failedGeminiJobs.size
+        };
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(status));
+        return;
+    }
 
     if (url.pathname === '/transcript') {
         const videoId = url.searchParams.get('v');
