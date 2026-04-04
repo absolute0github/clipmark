@@ -23,7 +23,7 @@
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Syne:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         * { font-family: 'Inter', sans-serif; }
         .scrollbar-thin::-webkit-scrollbar { width: 6px; }
@@ -1024,7 +1024,7 @@ Only return the JSON object, no other text.`;
                 return (
                     <div className="w-full h-full bg-gray-800 rounded-lg flex flex-col items-center justify-center">
                         <div className="text-center text-gray-400">
-                            <p className="text-emerald-400 mb-2">{playerError}</p>
+                            <p className="text-red-400 mb-2">{playerError}</p>
                             <a
                                 href={`https://www.youtube.com/watch?v=${videoId}`}
                                 target="_blank"
@@ -1794,7 +1794,7 @@ Only return the JSON object, no other text.`;
         };
 
         // Note Item Component
-        const NoteItem = ({ note, onSeek, onDelete, onEdit, onToggleFavorite, searchTerm }) => {
+        const NoteItem = ({ note, onSeek, onDelete, onEdit, onToggleFavorite, searchTerm, isNew }) => {
             const [isEditing, setIsEditing] = useState(false);
             const [editText, setEditText] = useState(note.text);
             const [showOriginal, setShowOriginal] = useState(false);
@@ -1846,7 +1846,7 @@ Only return the JSON object, no other text.`;
             };
 
             return (
-                <div className={`bg-gray-800 rounded-lg p-3 mb-2 hover:bg-gray-750 transition-colors ${searchTerm ? 'ring-1 ring-yellow-500/30' : ''}`}>
+                <div className={`bg-gray-800 rounded-lg p-3 mb-2 hover:bg-gray-750 transition-colors ${isNew ? 'ring-2 ring-emerald-400' : searchTerm ? 'ring-1 ring-yellow-500/30' : ''}`}>
                     <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2">
                             <button
@@ -1932,7 +1932,7 @@ Only return the JSON object, no other text.`;
                             </div>
                         </div>
                     ) : (
-                        <div className="mt-2 text-sm text-gray-300">
+                        <div className="mt-2 text-sm text-gray-100">
                             {showOriginal && note.originalText ? (
                                 <div>
                                     <div className="text-xs text-purple-400 mb-1">Original note:</div>
@@ -2064,18 +2064,20 @@ Only return the JSON object, no other text.`;
                             </button>
                         )}
                         {onDelete && (
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (confirm('Delete this video and all its notes?')) {
-                                        onDelete();
-                                    }
-                                }}
-                                className="bg-red-500 hover:bg-red-600 p-2 rounded-lg"
-                                title="Delete video"
-                            >
-                                <Icons.Trash />
-                            </button>
+                            confirmingDeleteId === video.id ? (
+                                <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                    <button onClick={() => { onDelete(); setConfirmingDeleteId(null); }} className="bg-red-500 hover:bg-red-600 px-2 py-1 rounded text-xs font-medium">Delete</button>
+                                    <button onClick={() => setConfirmingDeleteId(null)} className="bg-gray-600 hover:bg-gray-500 px-2 py-1 rounded text-xs">Cancel</button>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setConfirmingDeleteId(video.id); }}
+                                    className="bg-red-500 hover:bg-red-600 p-2 rounded-lg"
+                                    title="Delete video"
+                                >
+                                    <Icons.Trash />
+                                </button>
+                            )
                         )}
                     </div>
                     {/* Shared badge */}
@@ -2087,7 +2089,7 @@ Only return the JSON object, no other text.`;
                     )}
                 </div>
                 <div className="p-3 bg-gray-800">
-                    <h3 className="font-medium text-sm line-clamp-2">{video.title}</h3>
+                    <h3 className="font-semibold text-sm line-clamp-2">{video.title}</h3>
                     <div className="flex flex-wrap gap-1 mt-2">
                         {video.tags?.slice(0, 3).map(tag => (
                             <span key={tag} className="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-gray-300">
@@ -2236,18 +2238,20 @@ Only return the JSON object, no other text.`;
                             </button>
                         )}
                         {onDelete && (
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (confirm('Delete this video and all its notes?')) {
-                                        onDelete();
-                                    }
-                                }}
-                                className="bg-red-500 hover:bg-red-600 p-2 rounded-lg"
-                                title="Delete video"
-                            >
-                                <Icons.Trash />
-                            </button>
+                            confirmingDeleteId === video.id ? (
+                                <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                    <button onClick={() => { onDelete(); setConfirmingDeleteId(null); }} className="bg-red-500 hover:bg-red-600 px-2 py-1 rounded text-xs font-medium">Delete</button>
+                                    <button onClick={() => setConfirmingDeleteId(null)} className="bg-gray-600 hover:bg-gray-500 px-2 py-1 rounded text-xs">Cancel</button>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setConfirmingDeleteId(video.id); }}
+                                    className="bg-red-500 hover:bg-red-600 p-2 rounded-lg"
+                                    title="Delete video"
+                                >
+                                    <Icons.Trash />
+                                </button>
+                            )
                         )}
                     </div>
                 </div>
@@ -2580,8 +2584,8 @@ Only return the JSON object, no other text.`;
             if (!isOpen) return null;
 
             return (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-gray-800 rounded-xl w-full max-w-md p-6">
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-800 border border-gray-700 shadow-2xl rounded-xl w-full max-w-md p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold">Add New Video</h2>
                             <button onClick={onClose} className="p-1 hover:bg-gray-700 rounded">
@@ -2691,7 +2695,7 @@ Only return the JSON object, no other text.`;
                                             placeholder="New category name"
                                             className="w-full bg-gray-700 rounded-lg px-4 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                                         />
-                                        {categoryError && <p className="text-emerald-400 text-sm mt-1">{categoryError}</p>}
+                                        {categoryError && <p className="text-red-400 text-sm mt-1">{categoryError}</p>}
                                     </div>
                                 ) : (
                                     <select
@@ -2797,8 +2801,8 @@ Only return the JSON object, no other text.`;
             if (!isOpen || !video) return null;
 
             return (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-gray-800 rounded-xl w-full max-w-md p-6">
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-800 border border-gray-700 shadow-2xl rounded-xl w-full max-w-md p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold">Edit Video</h2>
                             <button onClick={onClose} className="p-1 hover:bg-gray-700 rounded">
@@ -2818,7 +2822,7 @@ Only return the JSON object, no other text.`;
                                     placeholder="Video title"
                                     className="w-full bg-gray-700 rounded-lg px-4 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                                 />
-                                {error && <p className="text-emerald-400 text-sm mt-1">{error}</p>}
+                                {error && <p className="text-red-400 text-sm mt-1">{error}</p>}
                             </div>
                             <div>
                                 <label className="block text-sm text-gray-400 mb-1">Category</label>
@@ -2866,7 +2870,7 @@ Only return the JSON object, no other text.`;
                                             placeholder="New category name"
                                             className="w-full bg-gray-700 rounded-lg px-4 py-2 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                                         />
-                                        {categoryError && <p className="text-emerald-400 text-sm mt-1">{categoryError}</p>}
+                                        {categoryError && <p className="text-red-400 text-sm mt-1">{categoryError}</p>}
                                     </div>
                                 ) : (
                                     <select
@@ -2938,8 +2942,8 @@ Only return the JSON object, no other text.`;
             if (!isOpen) return null;
 
             return (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-gray-800 rounded-xl w-full max-w-md p-6">
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-800 border border-gray-700 shadow-2xl rounded-xl w-full max-w-md p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold">Manage Categories</h2>
                             <button onClick={onClose} className="p-1 hover:bg-gray-700 rounded">
@@ -3030,8 +3034,8 @@ Only return the JSON object, no other text.`;
             if (!isOpen) return null;
 
             return (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-gray-800 rounded-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-800 border border-gray-700 shadow-2xl rounded-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold">Settings</h2>
                             <button onClick={onClose} className="p-1 hover:bg-gray-700 rounded">
@@ -3291,8 +3295,8 @@ Only return the JSON object, no other text.`;
             if (!isOpen) return null;
 
             return (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-gray-800 rounded-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-800 border border-gray-700 shadow-2xl rounded-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold">Edit Profile</h2>
                             <button onClick={onClose} className="p-1 hover:bg-gray-700 rounded">
@@ -3577,8 +3581,8 @@ Only return the JSON object, no other text.`;
             if (!isOpen || !video) return null;
 
             return (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-gray-800 rounded-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-800 border border-gray-700 shadow-2xl rounded-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold">Share Video</h2>
                             <button onClick={onClose} className="p-1 hover:bg-gray-700 rounded">
@@ -3589,9 +3593,9 @@ Only return the JSON object, no other text.`;
                         {/* Video Preview */}
                         <div className="flex gap-3 bg-gray-700/50 rounded-lg p-3 mb-4">
                             <img
-                                src={`https://img.youtube.com/vi/${video.videoId}/default.jpg`}
+                                src={video.thumbnail || getVideoThumbnail(video)}
                                 alt=""
-                                className="w-20 h-14 rounded object-cover"
+                                className="w-20 h-14 rounded object-cover bg-gray-700"
                             />
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium truncate">{video.title}</p>
@@ -3996,8 +4000,8 @@ Only return the JSON object, no other text.`;
             if (!isOpen) return null;
 
             return (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-gray-800 rounded-xl w-full max-w-lg p-6">
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-800 border border-gray-700 shadow-2xl rounded-xl w-full max-w-lg p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold flex items-center gap-2">
                                 <Icons.Transcript />
@@ -4195,8 +4199,8 @@ Only return the JSON object, no other text.`;
             };
 
             return (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-gray-800 rounded-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-800 border border-gray-700 shadow-2xl rounded-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold flex items-center gap-2">
                                 <Icons.Upload />
@@ -4366,8 +4370,8 @@ Only return the JSON object, no other text.`;
             if (!isOpen) return null;
 
             return (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-gray-800 rounded-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-800 border border-gray-700 shadow-2xl rounded-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold flex items-center gap-2">
                                 <Icons.Info />
@@ -4571,8 +4575,8 @@ Third subtitle text`}
             if (!isOpen || !pendingEnhancements || pendingEnhancements.length === 0) return null;
 
             return (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-gray-800 rounded-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-800 border border-gray-700 shadow-2xl rounded-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold">Review AI Suggestions</h2>
                             <button onClick={onClose} className="p-1 hover:bg-gray-700 rounded">
@@ -4892,8 +4896,8 @@ Third subtitle text`}
                             </div>
 
                             {error && (
-                                <div className="mt-4 p-3 bg-emerald-500/20 border border-emerald-500/50 rounded-lg">
-                                    <p className="text-emerald-400 text-sm">{error}</p>
+                                <div className="mt-4 p-3 bg-red-500/20 border border-red-500/40 rounded-lg">
+                                    <p className="text-red-400 text-sm">{error}</p>
                                 </div>
                             )}
 
@@ -5195,7 +5199,7 @@ Third subtitle text`}
                                 <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center">
                                     <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                                 </div>
-                                <span className="text-lg font-semibold tracking-tight">ClipMark</span>
+                                <span className="text-lg font-bold tracking-tight text-emerald-500" style={{fontFamily: "'Syne', sans-serif"}}>ClipMark</span>
                                 <span className="text-xs font-medium text-gray-500 border border-gray-700 rounded px-1.5 py-0.5 uppercase tracking-widest">Admin</span>
                             </div>
                         </div>
@@ -5617,6 +5621,7 @@ Third subtitle text`}
             const [showLibrary, setShowLibrary] = useState(true);
             const [libraryViewMode, setLibraryViewMode] = useState('grid'); // 'grid' or 'list'
             const [newNote, setNewNote] = useState('');
+            const [lastAddedNoteId, setLastAddedNoteId] = useState(null);
             const [noteSearch, setNoteSearch] = useState('');
             const [showFavoritesFirst, setShowFavoritesFirst] = useState(false);
             const [showRecentlyWatched, setShowRecentlyWatched] = useState(() => {
@@ -5654,6 +5659,7 @@ Third subtitle text`}
             const [showTranscriptModal, setShowTranscriptModal] = useState(false);
             const [showTranscriptHelp, setShowTranscriptHelp] = useState(false);
             const [transcriptUnavailable, setTranscriptUnavailable] = useState(false);
+            const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
 
             // Backup import modal state
             const [showImportModal, setShowImportModal] = useState(false);
@@ -6866,6 +6872,8 @@ Third subtitle text`}
                     return video;
                 }));
                 setNewNote('');
+                setLastAddedNoteId(newNoteObj.id);
+                setTimeout(() => setLastAddedNoteId(null), 1500);
             };
 
             // Save shared video notes to server
@@ -7504,7 +7512,7 @@ Third subtitle text`}
                                 <div className="text-center mb-8">
                                     <div className="flex items-center justify-center gap-3 mb-2">
                                         <img src="logos/clipmark-favicon.svg" alt="ClipMark" className="w-12 h-12" />
-                                        <h1 className="text-3xl font-bold text-emerald-500">ClipMark</h1>
+                                        <h1 className="text-3xl font-bold text-emerald-500" style={{fontFamily: "'Syne', sans-serif"}}>ClipMark</h1>
                                     </div>
                                     <p className="text-gray-400">Mark the moments that matter</p>
                                 </div>
@@ -7617,7 +7625,7 @@ Third subtitle text`}
                             <div className="flex items-center gap-3">
                                 {/* ClipMark Logo */}
                                 <img src="logos/clipmark-favicon.svg" alt="ClipMark" className="w-10 h-10" />
-                                <h1 className="text-2xl font-bold text-emerald-500">ClipMark</h1>
+                                <h1 className="text-2xl font-bold text-emerald-500" style={{fontFamily: "'Syne', sans-serif"}}>ClipMark</h1>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -7685,7 +7693,7 @@ Third subtitle text`}
                                     <span className="text-green-400">✓ Saved</span>
                                 )}
                                 {saveStatus === 'error' && (
-                                    <span className="text-emerald-400">⚠️ Save failed</span>
+                                    <span className="text-red-400">Save failed</span>
                                 )}
                             </div>
                             {/* Admin link for admin users */}
@@ -7770,11 +7778,11 @@ Third subtitle text`}
 
                     {/* Trial Banner */}
                     {subscription?.status === 'trial' && (
-                        <div className="bg-gradient-to-r from-emerald-900/40 to-cyan-900/40 border-b border-emerald-700/30 px-4 py-2 flex items-center justify-between shrink-0">
+                        <div className={`px-4 py-2 flex items-center justify-between shrink-0 border-b ${subscription.daysLeft <= 1 ? 'bg-gradient-to-r from-red-900/50 to-orange-900/50 border-red-700/30' : subscription.daysLeft <= 3 ? 'bg-gradient-to-r from-amber-900/50 to-orange-900/40 border-amber-700/30' : 'bg-gradient-to-r from-emerald-900/40 to-cyan-900/40 border-emerald-700/30'}`}>
                             <div className="flex items-center gap-2">
-                                <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                <span className="text-sm text-emerald-300">
-                                    <strong>{subscription.daysLeft} day{subscription.daysLeft !== 1 ? 's' : ''}</strong> left in your free trial
+                                <svg className={`w-4 h-4 ${subscription.daysLeft <= 1 ? 'text-red-400' : subscription.daysLeft <= 3 ? 'text-amber-400' : 'text-emerald-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                <span className={`text-sm ${subscription.daysLeft <= 1 ? 'text-red-300' : subscription.daysLeft <= 3 ? 'text-amber-300' : 'text-emerald-300'}`}>
+                                    <strong>{subscription.daysLeft <= 1 ? 'Last day!' : `${subscription.daysLeft} days`}</strong>{subscription.daysLeft > 1 ? ' left in your free trial' : ' Your trial ends today.'}
                                 </span>
                             </div>
                             <button
@@ -7789,7 +7797,7 @@ Third subtitle text`}
                                         if (data.url) window.location.href = data.url;
                                     } catch (e) { console.error('Checkout error:', e); }
                                 }}
-                                className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium rounded-lg transition-colors"
+                                className={`px-3 py-1 text-white text-xs font-medium rounded-lg transition-colors ${subscription.daysLeft <= 1 ? 'bg-red-500 hover:bg-red-600' : subscription.daysLeft <= 3 ? 'bg-amber-500 hover:bg-amber-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}
                             >
                                 Subscribe Now
                             </button>
@@ -7818,7 +7826,7 @@ Third subtitle text`}
                                                 if (data.url) window.location.href = data.url;
                                             } catch (e) { console.error('Checkout error:', e); }
                                         }}
-                                        className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition-colors"
+                                        className="w-full py-3 bg-white hover:bg-gray-100 text-slate-900 font-semibold rounded-xl transition-colors"
                                     >
                                         Subscribe — $9/month
                                     </button>
@@ -7867,7 +7875,7 @@ Third subtitle text`}
                             {/* Categories */}
                             <div className="px-4 pb-2">
                                 <div className="flex items-center justify-between mb-2">
-                                    <h3 className="text-sm font-medium text-gray-400">Categories</h3>
+                                    <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Categories</h3>
                                     <button
                                         onClick={() => setShowCategoryModal(true)}
                                         className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200"
@@ -7942,7 +7950,7 @@ Third subtitle text`}
 
                             {/* Video List */}
                             <div className="flex-1 overflow-y-auto scrollbar-thin px-4 py-2">
-                                <h3 className="text-sm font-medium text-gray-400 mb-2">Videos</h3>
+                                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Videos</h3>
                                 <div className="space-y-2">
                                     {sortedVideos.map(video => (
                                         <div key={video.id} className="mb-2">
@@ -7954,9 +7962,10 @@ Third subtitle text`}
                                             >
                                                 <div className="flex gap-2">
                                                     <img
-                                                        src={`https://img.youtube.com/vi/${video.videoId}/default.jpg`}
+                                                        src={getVideoThumbnail(video)}
                                                         alt=""
-                                                        className="w-16 h-12 object-cover rounded"
+                                                        className="w-16 h-12 object-cover rounded bg-gray-700"
+                                                        onError={e => { e.target.style.display='none'; }}
                                                 />
                                                     <div className="flex-1 min-w-0">
                                                         <p className="text-sm font-medium truncate">{video.title}</p>
@@ -8193,10 +8202,11 @@ Third subtitle text`}
                                             </div>
                                             )
                                         ) : (
-                                            <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-                                                <Icons.Bookmark />
-                                                <p className="mt-4 text-lg">No videos yet</p>
-                                                <p className="text-sm">Click "Add Video" to get started</p>
+                                            <div className="flex flex-col items-center justify-center h-64">
+                                                <svg className="w-12 h-12 text-gray-600 mb-3" fill="currentColor" viewBox="0 0 24 24"><path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
+                                                <p className="text-xl font-bold text-gray-200">No videos yet</p>
+                                                <p className="text-sm text-gray-500 mt-1">Save your first video to get started</p>
+                                                <button onClick={() => setShowAddModal(true)} className="mt-4 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">Add Video</button>
                                             </div>
                                         )}
                                     </div>
@@ -8392,17 +8402,20 @@ Third subtitle text`}
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                                                                     </svg>
                                                                 </button>
+                                                                {confirmingDeleteId === activeVideoId ? (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <button onClick={() => { handleDeleteVideo(activeVideoId); setConfirmingDeleteId(null); }} className="bg-red-500 hover:bg-red-600 px-2 py-1 rounded text-xs font-medium text-white">Delete</button>
+                                                                        <button onClick={() => setConfirmingDeleteId(null)} className="bg-gray-600 hover:bg-gray-500 px-2 py-1 rounded text-xs text-white">Cancel</button>
+                                                                    </div>
+                                                                ) : (
                                                                 <button
-                                                                    onClick={() => {
-                                                                        if (confirm('Delete this video and all its notes?')) {
-                                                                            handleDeleteVideo(activeVideoId);
-                                                                        }
-                                                                    }}
+                                                                    onClick={() => setConfirmingDeleteId(activeVideoId)}
                                                                     className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-red-400"
                                                                     title="Delete video"
                                                                 >
                                                                     <Icons.Trash />
                                                                 </button>
+                                                                )}
                                                             </>
                                                         )}
                                                         {displayVideo.isShared && (
@@ -8427,7 +8440,7 @@ Third subtitle text`}
                                                 <div className="bg-gray-800 rounded-lg p-4">
                                                     {/* Header row */}
                                                     <div className="flex items-center justify-between mb-3">
-                                                        <span className="text-emerald-500 font-semibold italic">ClipMark</span>
+                                                        <span className="text-emerald-500 font-bold" style={{fontFamily: "'Syne', sans-serif"}}>ClipMark</span>
                                                         <span className="text-gray-400 text-sm">Adding note at {formatTime(currentTime)}</span>
                                                     </div>
                                                     {/* Main input row */}
@@ -8572,6 +8585,7 @@ Third subtitle text`}
                                                                 <NoteItem
                                                                     key={note.id}
                                                                     note={note}
+                                                                    isNew={note.id === lastAddedNoteId}
                                                                     onSeek={handleSeek}
                                                                     onDelete={handleDeleteNote}
                                                                     onEdit={handleEditNote}
@@ -8586,9 +8600,10 @@ Third subtitle text`}
                                                         );
                                                     })()
                                                 ) : (
-                                                    <p className="text-center text-gray-500 py-8">
-                                                        No notes yet. Add one below!
-                                                    </p>
+                                                    <div className="flex flex-col items-center py-8">
+                                                        <p className="font-semibold text-gray-300">No notes yet</p>
+                                                        <p className="text-sm text-gray-500 mt-1">Add a note below to capture key moments</p>
+                                                    </div>
                                                 )}
                                             </div>
                                             {/* Video Description */}
