@@ -1788,9 +1788,10 @@ function parseJson3Transcript(data) {
 async function getTranscriptInnertube(videoId) {
     console.log('Trying innertube API method...');
 
-    // First, get the page to extract necessary tokens and cookies
+    // First, get the page to extract necessary tokens and cookies.
+    // Use a 8s timeout and no retries so Hetzner IP blocks fail fast.
     const pageUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    const pageResponse = await fetchUrlWithRetry(pageUrl);
+    const pageResponse = await fetchUrlWithRetry(pageUrl, { timeout: 8000 }, 0);
 
     if (pageResponse.status !== 200) {
         throw new Error(`Failed to fetch YouTube page: ${pageResponse.status}`);
@@ -2098,9 +2099,12 @@ async function getTranscriptViaGemini(videoId) {
 }
 
 // Direct timedtext API method - doesn't require page scraping
+// Uses short 5s timeout so blocked Hetzner IPs fail fast rather than hanging.
 async function getTranscriptTimedText(videoId) {
     console.log('Trying direct timedtext API...');
-    const langs = ['en', 'en-US', 'en-GB', 'a.en'];
+    // Try the most common auto-caption lang first, then manual English variants.
+    // Limit to no-retry (maxRetries=0) and short timeout to fail fast if blocked.
+    const langs = ['a.en', 'en', 'en-US', 'en-GB'];
 
     for (const lang of langs) {
         for (const fmt of ['json3', 'srv3', '']) {
@@ -2108,7 +2112,7 @@ async function getTranscriptTimedText(videoId) {
             const url = `https://www.youtube.com/api/timedtext?v=${videoId}&lang=${lang}${fmtParam}`;
 
             try {
-                const response = await fetchUrlWithRetry(url, {}, 1);
+                const response = await fetchUrlWithRetry(url, { timeout: 5000 }, 0);
                 if (response.status === 200 && response.data.length > 50) {
                     const transcript = parseTranscriptData(response.data);
                     if (transcript.length > 0) {
@@ -2116,8 +2120,18 @@ async function getTranscriptTimedText(videoId) {
                         return transcript;
                     }
                 }
+                // If we get a hard block (403/429), stop trying immediately
+                if (response.status === 403 || response.status === 429) {
+                    console.log(`Timedtext blocked (${response.status}) — aborting fast path`);
+                    return null;
+                }
             } catch (e) {
-                // Continue to next lang/fmt combo
+                // Timeout or network error — if it's a timeout on the first try, bail out early
+                if (e.message.includes('timeout')) {
+                    console.log(`Timedtext timeout — aborting fast path`);
+                    return null;
+                }
+                // Otherwise continue to next lang/fmt combo
             }
         }
     }
@@ -2158,8 +2172,35 @@ async function getTranscript(videoId) {
         }
     }
 
-    // Gemini API is the primary method — YouTube scraping doesn't work
-    // reliably from datacenter IPs (bot detection, 429 rate limiting).
+    // Method 1: Try YouTube's timedtext API first — fast (< 2s) when it works.
+    // Uses a short 5s timeout so Hetzner IP blocks fail quickly without delaying the user.
+    try {
+        console.log(`Attempting fast timedtext API for ${videoId}...`);
+        const transcript = await getTranscriptTimedText(videoId);
+        if (transcript && transcript.length > 0) {
+            console.log(`✅ Got ${transcript.length} segments via timedtext (fast path)`);
+            cacheTranscript(videoId, transcript);
+            return transcript;
+        }
+    } catch (e) {
+        console.log(`Timedtext fast path failed: ${e.message} — falling back to Gemini`);
+    }
+
+    // Method 2: Innertube caption extraction — parses caption track URLs from the page.
+    // Also falls back to Gemini on failure since datacenter IPs may be blocked.
+    try {
+        console.log(`Attempting innertube method for ${videoId}...`);
+        const transcript = await getTranscriptInnertube(videoId);
+        if (transcript && transcript.length > 0) {
+            console.log(`✅ Got ${transcript.length} segments via innertube (fast path)`);
+            cacheTranscript(videoId, transcript);
+            return transcript;
+        }
+    } catch (e) {
+        console.log(`Innertube method failed: ${e.message} — falling back to Gemini`);
+    }
+
+    // Method 3: Gemini API — reliable from any IP, but slow (30-60s for background job).
     // Start as background job to avoid Cloudflare 100s timeout on long videos.
     if (GEMINI_API_KEY && !pendingGeminiJobs.has(videoId)) {
         const attemptNum = (failedJob?.attempts || 0) + 1;

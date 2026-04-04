@@ -4,6 +4,14 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.4.8] - 2026-04-04
+
+### Fixed
+- **YouTube transcript "Get Context" regression** — `getTranscript()` in `transcript-server.js` was skipping the fast timedtext and innertube methods and going straight to the slow Gemini background job (30-60s) for every YouTube video, even those with standard captions. Restored the fast path: timedtext API is tried first (5s timeout, no retries), then innertube (8s timeout, no retries), with Gemini as the fallback only when both fail. When Hetzner IPs are blocked by YouTube, the fast methods now fail in under 5s and gracefully fall through to Gemini instead of hanging.
+
+### Files Modified
+- `transcript-server.js` — Restored timedtext + innertube as fast-path attempts before Gemini in `getTranscript()`; added short timeouts (5s/8s) and early-abort on 403/429/timeout to prevent long hangs on blocked IPs
+
 ## [3.4.7] - 2026-04-04
 
 ### Changed
