@@ -4,6 +4,28 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.4.7] - 2026-04-04
+
+### Changed
+- **App header restructured into 3 clean groups** — Logo | Utility actions | Add Video CTA. Export/Import moved into "..." dropdown. Library toggle, refresh, save status, shares bell, and settings consolidated into a single utility bar with visual dividers. Save status cleaned up (no emoji). User chip logout icon now red on hover.
+- **VERA design audit — full UI polish pass** — all 12 VERA-flagged issues resolved:
+  - Error messages consistently red (not emerald)
+  - Syne font unified across wordmarks
+  - Sidebar thumbnails fixed for non-YouTube videos
+  - Confirm() dialogs replaced with inline Delete/Cancel UI
+  - Sidebar section labels → `text-xs uppercase tracking-wider`
+  - Note body text `text-gray-100`, card title `font-semibold`
+  - All 8 modals: darker overlay (`bg-black/70`), added border + `shadow-2xl`
+  - New note flashes `ring-2 ring-emerald-400` for 1.5s after save
+  - Trial banner urgency escalation (green → amber → red by days remaining)
+  - Expired modal monthly CTA → `bg-white text-slate-900`
+  - Library and notes empty states improved (larger icon, bold title, subtext, CTA)
+  - Chrome extension install instructions legibility fixed
+
+### Files Modified
+- `app.html` — Header restructure, all VERA fixes applied
+- `index.html` — Chrome extension install text contrast fixed
+
 ## [3.4.6] - 2026-04-04
 
 ### Changed

@@ -5622,6 +5622,7 @@ Third subtitle text`}
             const [libraryViewMode, setLibraryViewMode] = useState('grid'); // 'grid' or 'list'
             const [newNote, setNewNote] = useState('');
             const [lastAddedNoteId, setLastAddedNoteId] = useState(null);
+            const [showMoreMenu, setShowMoreMenu] = useState(false);
             const [noteSearch, setNoteSearch] = useState('');
             const [showFavoritesFirst, setShowFavoritesFirst] = useState(false);
             const [showRecentlyWatched, setShowRecentlyWatched] = useState(() => {
@@ -7620,60 +7621,34 @@ Third subtitle text`}
             return (
                 <div className="h-screen flex flex-col">
                     {/* Header */}
-                    <header className="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between shrink-0">
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-3">
-                                {/* ClipMark Logo */}
-                                <img src="logos/clipmark-favicon.svg" alt="ClipMark" className="w-10 h-10" />
-                                <h1 className="text-2xl font-bold text-emerald-500" style={{fontFamily: "'Syne', sans-serif"}}>ClipMark</h1>
-                            </div>
+                    <header className="bg-gray-800 border-b border-gray-700 px-4 py-2.5 flex items-center gap-3 shrink-0">
+
+                        {/* Group 1: Logo */}
+                        <div className="flex items-center gap-2.5 shrink-0">
+                            <img src="logos/clipmark-favicon.svg" alt="ClipMark" className="w-8 h-8" />
+                            <h1 className="text-xl font-bold text-emerald-500" style={{fontFamily: "'Syne', sans-serif"}}>ClipMark</h1>
                         </div>
-                        <div className="flex items-center gap-2">
+
+                        {/* Spacer */}
+                        <div className="flex-1" />
+
+                        {/* Group 2: Utility actions */}
+                        <div className="flex items-center gap-1">
+
+                            {/* Library toggle */}
                             <button
                                 onClick={() => setShowLibrary(!showLibrary)}
-                                className={`p-2 rounded-lg transition-colors ${showLibrary ? 'bg-emerald-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
+                                className={`p-2 rounded-lg transition-colors ${showLibrary ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-gray-700 text-gray-400'}`}
                                 title="Toggle Library"
                             >
                                 <Icons.Grid />
                             </button>
-                            <button
-                                onClick={handleExport}
-                                className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg"
-                                title="Export Backup"
-                            >
-                                <Icons.Download />
-                            </button>
-                            <button
-                                onClick={() => fileInputRef.current?.click()}
-                                className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg"
-                                title="Import Backup"
-                            >
-                                <Icons.Upload />
-                            </button>
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept=".json"
-                                onChange={handleImport}
-                                className="hidden"
-                            />
-                            {/* Pending Shares Notification */}
-                            <PendingSharesDropdown
-                                serverUrl={SERVER_URL}
-                                authToken={authToken}
-                                onAcceptShare={reloadSharedVideos}
-                            />
-                            <button
-                                onClick={() => setShowSettingsModal(true)}
-                                className={`p-2 rounded-lg transition-colors ${apiStatus.geminiConfigured ? 'bg-gray-700 hover:bg-gray-600' : 'bg-yellow-600 hover:bg-yellow-700'}`}
-                                title={apiStatus.geminiConfigured ? 'Settings' : 'Gemini AI not configured'}
-                            >
-                                <Icons.Settings />
-                            </button>
+
+                            {/* Refresh */}
                             <button
                                 onClick={handleRefresh}
                                 disabled={isRefreshing}
-                                className="p-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors"
+                                className="p-2 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors text-gray-400"
                                 title="Refresh bookmarks from server"
                             >
                                 {isRefreshing ? (
@@ -7685,18 +7660,54 @@ Third subtitle text`}
                                     <Icons.Refresh />
                                 )}
                             </button>
-                            <div className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg">
-                                {saveStatus === 'saving' && (
-                                    <span className="text-yellow-400 animate-pulse">💾 Saving...</span>
-                                )}
-                                {saveStatus === 'saved' && lastSaveTime && (
-                                    <span className="text-green-400">✓ Saved</span>
-                                )}
-                                {saveStatus === 'error' && (
-                                    <span className="text-red-400">Save failed</span>
+
+                            {/* Save status */}
+                            <div className="text-xs px-2 min-w-[56px] text-center">
+                                {saveStatus === 'saving' && <span className="text-yellow-400 animate-pulse">Saving…</span>}
+                                {saveStatus === 'saved' && lastSaveTime && <span className="text-emerald-400">✓ Saved</span>}
+                                {saveStatus === 'error' && <span className="text-red-400">Save failed</span>}
+                            </div>
+
+                            {/* Divider */}
+                            <div className="w-px h-5 bg-gray-600 mx-1" />
+
+                            {/* More dropdown (Export + Import) */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowMoreMenu(v => !v)}
+                                    className={`p-2 rounded-lg transition-colors text-gray-400 hover:bg-gray-700 ${showMoreMenu ? 'bg-gray-700' : ''}`}
+                                    title="More options"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" /></svg>
+                                </button>
+                                {showMoreMenu && (
+                                    <div className="absolute right-0 top-full mt-1 w-44 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 py-1" onClick={() => setShowMoreMenu(false)}>
+                                        <button
+                                            onClick={handleExport}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-200 hover:bg-gray-700 transition-colors"
+                                        >
+                                            <Icons.Download />
+                                            Export Backup
+                                        </button>
+                                        <button
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-200 hover:bg-gray-700 transition-colors"
+                                        >
+                                            <Icons.Upload />
+                                            Import Backup
+                                        </button>
+                                    </div>
                                 )}
                             </div>
-                            {/* Admin link for admin users */}
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".json"
+                                onChange={handleImport}
+                                className="hidden"
+                            />
+
+                            {/* Admin link */}
                             {isAdmin && (
                                 <a
                                     href="/admin"
@@ -7708,7 +7719,8 @@ Third subtitle text`}
                                     </svg>
                                 </a>
                             )}
-                            {/* Subscription management */}
+
+                            {/* Subscription portal */}
                             {subscription?.status === 'active' && subscription?.stripeCustomerId && (
                                 <button
                                     onClick={async () => {
@@ -7729,35 +7741,58 @@ Third subtitle text`}
                                     </svg>
                                 </button>
                             )}
-                            {/* User info and logout */}
+
+                            {/* Pending shares bell */}
+                            <PendingSharesDropdown
+                                serverUrl={SERVER_URL}
+                                authToken={authToken}
+                                onAcceptShare={reloadSharedVideos}
+                            />
+
+                            {/* Settings */}
+                            <button
+                                onClick={() => setShowSettingsModal(true)}
+                                className={`p-2 rounded-lg transition-colors ${apiStatus.geminiConfigured ? 'hover:bg-gray-700 text-gray-400' : 'bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30'}`}
+                                title={apiStatus.geminiConfigured ? 'Settings' : 'Gemini AI not configured'}
+                            >
+                                <Icons.Settings />
+                            </button>
+
+                            {/* Divider */}
+                            <div className="w-px h-5 bg-gray-600 mx-1" />
+
+                            {/* User chip */}
                             {currentUser && (
-                                <div className="flex items-center gap-2 px-3 py-1 bg-gray-700 rounded-lg">
-                                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-700/60 rounded-lg">
+                                    <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                     </svg>
-                                    <span className="text-sm text-gray-300">{currentUser.username}</span>
+                                    <span className="text-sm text-gray-300 font-medium">{currentUser.username}</span>
                                     {isAdmin && (
-                                        <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded">Admin</span>
+                                        <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded font-medium">Admin</span>
                                     )}
                                     <button
                                         onClick={handleLogout}
-                                        className="ml-1 p-1 text-gray-400 hover:text-emerald-400 transition-colors"
+                                        className="ml-0.5 p-1 text-gray-500 hover:text-red-400 transition-colors rounded"
                                         title="Logout"
                                     >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                                         </svg>
                                     </button>
                                 </div>
                             )}
-                            <button
-                                onClick={() => setShowAddModal(true)}
-                                className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded-lg font-medium transition-colors"
-                            >
-                                <Icons.Plus />
-                                Add Video
-                            </button>
                         </div>
+
+                        {/* Group 3: Primary CTA */}
+                        <button
+                            onClick={() => setShowAddModal(true)}
+                            className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded-lg font-semibold text-sm transition-colors shrink-0"
+                        >
+                            <Icons.Plus />
+                            Add Video
+                        </button>
+
                     </header>
 
                     {/* Storage Warning Banner */}
