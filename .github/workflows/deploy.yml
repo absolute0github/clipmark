@@ -22,4 +22,4 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             npm install --production
-            systemctl restart pm2-clipmark
+            su - clipmark -s /bin/bash -c 'pm2 reload clipmark --update-env'
