@@ -213,22 +213,33 @@ When the app loads:
 
 **Production URL**: https://clipmark.top
 
-**Hosting**: Railway (Docker/nixpacks)
-- **DNS**: Cloudflare (free plan) — CNAME flattening for root domain pointing to Railway
-- **SSL**: Cloudflare (edge) + Railway (origin), SSL mode set to Full
+**Hosting**: Hetzner CX23 VPS (Helsinki), 2 vCPU, 4GB RAM
+- **Process Manager**: PM2 with systemd startup
+- **Reverse Proxy**: nginx (handles SSL termination, static files, proxies to Node.js)
+- **SSL**: Let's Encrypt (via certbot/nginx)
+- **DNS**: Cloudflare (free plan) — CNAME flattening for root domain pointing to Hetzner
 - **www redirect**: Cloudflare redirect rule, `www.clipmark.top` → `clipmark.top` (301)
-- **Port**: Railway auto-detects port 8080; server listens on `process.env.PORT`
-- **Persistent storage**: Railway volume mounted at `RAILWAY_VOLUME_MOUNT_PATH`
+- **Persistent storage**: Local disk (data/ directory)
 
-### Required Environment Variables (Railway)
+### Deploying Changes
+```bash
+# SSH into the server, pull latest code, and restart
+ssh <server>
+cd /path/to/videonote-snatch
+git pull origin main
+pm2 restart all
+```
+**Note**: Unlike Railway, Hetzner does NOT auto-deploy on git push. A GitHub webhook for auto-deploy is planned but not yet configured.
+
+### Required Environment Variables
 | Variable | Description |
 |----------|-------------|
 | `APP_URL` | `https://clipmark.top` — used for email share links |
-| `PORT` | Set by Railway automatically |
+| `PORT` | Port for Node.js server (nginx proxies to this) |
 | `GEMINI_API_KEY` | For AI summaries and transcription |
 | `YOUTUBE_API_KEY` | For video metadata |
 | `RESEND_API_KEY` | Email service for invitations |
-| `RAILWAY_VOLUME_MOUNT_PATH` | Set by Railway for persistent data |
+| `STRIPE_SECRET_KEY` | For subscription payments |
 
 ### Domain Setup Notes
 - The app uses relative paths and dynamic server URL detection — no hardcoded domains in code
