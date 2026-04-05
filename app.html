@@ -1050,7 +1050,15 @@ Only return the JSON object, no other text.`;
                 );
             }
 
-            return <div id={playerId} className="w-full h-full rounded-lg overflow-hidden" />;
+            // Outer div is owned by React and never touched by the YouTube IFrame API.
+            // Inner div is what YouTube replaces with an <iframe>.
+            // Without this wrapper, React's removeChild(div#playerId) fails because
+            // YouTube already replaced that div with an iframe → "not a child" crash.
+            return (
+                <div className="w-full h-full rounded-lg overflow-hidden">
+                    <div id={playerId} className="w-full h-full" />
+                </div>
+            );
         };
 
         // Vimeo Player Adapter
@@ -1218,7 +1226,13 @@ Only return the JSON object, no other text.`;
                 );
             }
 
-            return <div id={playerId} className="w-full h-full rounded-lg overflow-hidden" />;
+            // Same wrapper pattern as YouTubePlayer — Vimeo SDK also replaces
+            // the target div with an iframe, causing the same removeChild crash.
+            return (
+                <div className="w-full h-full rounded-lg overflow-hidden">
+                    <div id={playerId} className="w-full h-full" />
+                </div>
+            );
         };
 
         // HTML5 Video Player Adapter (for direct video URLs)
@@ -8570,7 +8584,7 @@ Third subtitle text`}
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.11</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.12</p>
                                             </div>
                                         )}
                                     </div>

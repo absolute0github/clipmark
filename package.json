@@ -1,6 +1,6 @@
 {
   "name": "videonote-snatch",
-  "version": "3.4.11",
+  "version": "3.4.12",
   "description": "YouTube bookmarking app with timestamped notes",
   "main": "transcript-server.js",
   "scripts": {
