@@ -4326,8 +4326,9 @@ Format your response as JSON with a "message" field explaining this, and include
                         const inc = incomingMap.get(id);
 
                         if (!inc) {
-                            // Video only on server — keep it (never delete)
-                            merged.push(ext);
+                            // Video only on server — client omitted it, so it was deleted; drop it.
+                            // The client is the authoritative source: if a video isn't in the
+                            // incoming payload it has been removed and should not be re-added.
                         } else if (!ext) {
                             // Video only in incoming — add it
                             merged.push(inc);
