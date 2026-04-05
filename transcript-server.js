@@ -1618,6 +1618,8 @@ function fetchUrl(url, options = {}) {
             hostname: parsedUrl.hostname,
             path: parsedUrl.pathname + parsedUrl.search,
             method: options.method || 'GET',
+            // Force IPv4 when caller requests it (e.g. IP-restricted API keys)
+            ...(options.forceIPv4 ? { family: 4 } : {}),
             headers: {
                 'User-Agent': getNextUserAgent(),
                 'Accept-Language': 'en-US,en;q=0.9',
@@ -2050,6 +2052,7 @@ async function getTranscriptViaGemini(videoId) {
         try {
             const response = await fetchUrl(apiUrl, {
                 method: 'POST',
+                forceIPv4: true,  // API key is IP-restricted to IPv4 address
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
@@ -3985,6 +3988,7 @@ const server = http.createServer(async (req, res) => {
                 `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
                 {
                     method: 'POST',
+                    forceIPv4: true,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         contents: [{ parts: [{ text: prompt }] }],
@@ -4200,6 +4204,7 @@ Format your response as JSON with a "message" field explaining this, and include
                 `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
                 {
                     method: 'POST',
+                    forceIPv4: true,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         contents: [{ parts: [{ text: prompt }] }],
