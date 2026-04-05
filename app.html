@@ -871,6 +871,18 @@ Only return the JSON object, no other text.`;
                             if (playerRef.current._timeInterval) {
                                 clearInterval(playerRef.current._timeInterval);
                             }
+                            // Detach the iframe from its container before calling destroy().
+                            // When switching videos React unmounts the container div before
+                            // the cleanup runs, leaving the iframe's parentNode detached.
+                            // destroy() then calls removeChild on a stale parent, throwing
+                            // "The node to be removed is not a child of this node".
+                            // Pre-removing the iframe makes destroy()'s internal removeChild a no-op.
+                            try {
+                                const iframe = playerRef.current.getIframe?.();
+                                if (iframe && iframe.parentNode) {
+                                    iframe.parentNode.removeChild(iframe);
+                                }
+                            } catch (_) {}
                             playerRef.current.destroy();
                         } catch (e) {
                             console.log('Player cleanup error:', e);
@@ -8558,7 +8570,7 @@ Third subtitle text`}
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.10</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.11</p>
                                             </div>
                                         )}
                                     </div>
