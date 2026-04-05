@@ -8,9 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - **"Get Context" no longer requires a second manual click for AI-generated transcripts** — On production (Hetzner), YouTube's timedtext and innertube APIs fail due to bot detection, so Gemini is always used as a background job. Previously this showed a "click again in 30-60 seconds" message. Now the button stays in loading state and automatically polls `/api/transcript/status` every 5 seconds until the transcript is ready, then applies it to the note field without any user action. Polling times out after 5 minutes.
+- **Gemini "contents is not specified" 400 error** — `fetchUrl()` was not setting `Content-Length` header on POST requests, causing Node.js to use chunked transfer-encoding which the Gemini API cannot parse. Now sets `Content-Length: Buffer.byteLength(body)` for all requests with a body.
+- **Gemini model fallback chain** — If `gemini-2.5-flash` returns 404 (deprecated) or fails, automatically tries `gemini-2.0-flash`. Billing/rate-limit errors (429) surface the actual Gemini error message instead of generic "HTTP 429".
 
 ### Files Modified
 - `app.html` — Replaced manual "click again" UX in `handleLoadContext` with automatic polling loop (`pollUntilReady`); captures timestamp at click time so context is applied at the correct video position when polling completes
+- `transcript-server.js` — Added `Content-Length` header in `fetchUrl()` for POST bodies; refactored `getTranscriptViaGemini()` to try multiple models with proper error classification (404 = try next model, 429 = surface billing error, other = continue)
 
 ## [3.4.8] - 2026-04-04
 

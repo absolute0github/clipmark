@@ -1624,6 +1624,8 @@ function fetchUrl(url, options = {}) {
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 // Consent cookie bypasses YouTube's consent wall for bot-like requests
                 'Cookie': 'CONSENT=YES+1',
+                // Content-Length required for APIs that don't support chunked transfer-encoding
+                ...(options.body ? { 'Content-Length': Buffer.byteLength(options.body) } : {}),
                 ...options.headers
             }
         };
@@ -2016,11 +2018,13 @@ function parseTranscriptData(data) {
 
 // Gemini API method - uses Gemini to extract transcript from YouTube video
 // Completely bypasses YouTube scraping, works regardless of IP rate limits
+// Tries multiple models in order — older models get deprecated, billing caps vary
+const GEMINI_TRANSCRIPT_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+
 async function getTranscriptViaGemini(videoId) {
     if (!GEMINI_API_KEY) return null;
     console.log('Trying Gemini API transcript extraction...');
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
     const payload = JSON.stringify({
         contents: [{
             parts: [
@@ -2037,65 +2041,97 @@ async function getTranscriptViaGemini(videoId) {
         }]
     });
 
-    console.log(`📡 Calling Gemini API for video ${videoId} (payload: ${payload.length} bytes)...`);
+    let lastError = null;
 
-    const response = await fetchUrl(apiUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            // Override fetchUrl defaults — don't send YouTube cookies to Gemini
-            'Cookie': '',
-            'User-Agent': 'ClipMark/1.0'
-        },
-        body: payload,
-        timeout: 300000  // Gemini 2.5 needs up to 5 min for long videos
-    });
+    for (const model of GEMINI_TRANSCRIPT_MODELS) {
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+        console.log(`📡 Calling Gemini API (${model}) for video ${videoId} (payload: ${payload.length} bytes)...`);
 
-    if (response.status !== 200) {
-        console.log(`Gemini API returned ${response.status}: ${response.data?.substring(0, 300)}`);
-        throw new Error(`Gemini API HTTP ${response.status}`);
-    }
+        try {
+            const response = await fetchUrl(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    // Override fetchUrl defaults — don't send YouTube cookies to Gemini
+                    'Cookie': '',
+                    'User-Agent': 'ClipMark/1.0'
+                },
+                body: payload,
+                timeout: 300000  // Up to 5 min for long videos
+            });
 
-    const data = JSON.parse(response.data);
-
-    // Check for blocked or empty responses
-    if (data?.candidates?.[0]?.finishReason === 'SAFETY') {
-        console.log('⚠️ Gemini blocked response for safety reasons');
-        throw new Error('Gemini blocked response (safety filter)');
-    }
-    if (!data?.candidates?.length) {
-        console.log('⚠️ Gemini returned no candidates:', JSON.stringify(data).substring(0, 300));
-        throw new Error('Gemini returned no candidates');
-    }
-
-    let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-    // Track system-level API usage for transcript fetches
-    trackSystemApiUsage('/transcript (gemini)', data.usageMetadata);
-
-    // Strip markdown code fences if present
-    text = text.replace(/^```json\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-
-    try {
-        const segments = JSON.parse(text);
-        if (Array.isArray(segments) && segments.length > 0) {
-            const transcript = segments.map(s => ({
-                start: parseFloat(s.start) || 0,
-                duration: parseFloat(s.duration) || 5,
-                text: String(s.text || '').trim()
-            })).filter(t => t.text);
-
-            if (transcript.length > 0) {
-                console.log(`✅ Got ${transcript.length} segments via Gemini API`);
-                return transcript;
+            if (response.status === 404) {
+                console.log(`⚠️ Model ${model} not found, trying next...`);
+                continue;
             }
+
+            if (response.status === 429) {
+                // Billing cap or rate limit — parse the actual message
+                let errMsg = 'Rate limited';
+                try {
+                    const errData = JSON.parse(response.data);
+                    errMsg = errData?.error?.message || errMsg;
+                } catch (_) {}
+                console.log(`⚠️ Gemini ${model} returned 429: ${errMsg}`);
+                throw new Error(`Gemini billing/rate limit: ${errMsg}`);
+            }
+
+            if (response.status !== 200) {
+                console.log(`Gemini ${model} returned ${response.status}: ${response.data?.substring(0, 300)}`);
+                lastError = new Error(`Gemini API HTTP ${response.status}`);
+                continue;
+            }
+
+            const data = JSON.parse(response.data);
+
+            if (data?.candidates?.[0]?.finishReason === 'SAFETY') {
+                console.log('⚠️ Gemini blocked response for safety reasons');
+                throw new Error('Gemini blocked response (safety filter)');
+            }
+            if (!data?.candidates?.length) {
+                console.log('⚠️ Gemini returned no candidates:', JSON.stringify(data).substring(0, 300));
+                lastError = new Error('Gemini returned no candidates');
+                continue;
+            }
+
+            let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+            trackSystemApiUsage('/transcript (gemini)', data.usageMetadata);
+
+            // Strip markdown code fences if present
+            text = text.replace(/^```json\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+
+            try {
+                const segments = JSON.parse(text);
+                if (Array.isArray(segments) && segments.length > 0) {
+                    const transcript = segments.map(s => ({
+                        start: parseFloat(s.start) || 0,
+                        duration: parseFloat(s.duration) || 5,
+                        text: String(s.text || '').trim()
+                    })).filter(t => t.text);
+
+                    if (transcript.length > 0) {
+                        console.log(`✅ Got ${transcript.length} segments via Gemini API (${model})`);
+                        return transcript;
+                    }
+                }
+            } catch (e) {
+                console.log(`Gemini ${model} response parse error: ${e.message}`);
+                console.log('Raw text:', text.substring(0, 200));
+            }
+
+            lastError = new Error(`Gemini ${model} returned unparseable response`);
+        } catch (e) {
+            // 429 billing/rate limit errors are terminal — don't try other models
+            if (e.message.includes('billing') || e.message.includes('spending cap')) {
+                throw e;
+            }
+            lastError = e;
         }
-    } catch (e) {
-        console.log(`Gemini response parse error: ${e.message}`);
-        console.log('Raw text:', text.substring(0, 200));
     }
 
+    if (lastError) throw lastError;
     return null;
 }
 
