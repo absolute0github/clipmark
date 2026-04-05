@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit*)",
+            "statusMessage": "Bumping patch version...",
+            "command": "PROJ=\"/var/www/projects/saas/clipmark\"; CUR=$(jq -r '.version' \"$PROJ/package.json\"); MA=$(echo $CUR | cut -d. -f1); MI=$(echo $CUR | cut -d. -f2); PA=$(echo $CUR | cut -d. -f3); NEW=\"$MA.$MI.$((PA+1))\"; jq --arg v \"$NEW\" '.version = $v' \"$PROJ/package.json\" > /tmp/_clipmark_pkg.json && mv /tmp/_clipmark_pkg.json \"$PROJ/package.json\"; sed -i \"s/v${CUR}/v${NEW}/g\" \"$PROJ/app.html\"; DATE=$(date +%Y-%m-%d); sed -i \"s|## \\[${CUR}\\].*|## [${NEW}] - ${DATE}|\" \"$PROJ/CHANGELOG.md\"; git -C \"$PROJ\" add \"$PROJ/package.json\" \"$PROJ/app.html\" \"$PROJ/CHANGELOG.md\"; echo \"{\\\"systemMessage\\\": \\\"Version bumped $CUR → $NEW\\\"}\""
+          }
+        ]
+      }
+    ]
+  }
+}

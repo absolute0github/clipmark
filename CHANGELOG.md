@@ -4,6 +4,14 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.4.10] - 2026-04-05
+
+### Fixed
+- **"Get Context" no longer requires a second manual click for AI-generated transcripts** — On production (Hetzner), YouTube's timedtext and innertube APIs fail due to bot detection, so Gemini is always used as a background job. Previously this showed a "click again in 30-60 seconds" message. Now the button stays in loading state and automatically polls `/api/transcript/status` every 5 seconds until the transcript is ready, then applies it to the note field without any user action. Polling times out after 5 minutes.
+
+### Files Modified
+- `app.html` — Replaced manual "click again" UX in `handleLoadContext` with automatic polling loop (`pollUntilReady`); captures timestamp at click time so context is applied at the correct video position when polling completes
+
 ## [3.4.8] - 2026-04-04
 
 ### Fixed
