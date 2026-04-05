@@ -7196,10 +7196,33 @@ Third subtitle text`}
                 setEnhancementProgress({ current: 0, total: video.notes.length });
 
                 try {
-                    // Fetch transcript
+                    // Fetch transcript — poll if Gemini background job is running
                     let transcript = cachedTranscript?.data;
                     if (!transcript || cachedTranscript?.videoId !== ytVideoId) {
-                        transcript = await fetchTranscript(ytVideoId);
+                        const fetchWithPoll = async () => {
+                            try {
+                                return await fetchTranscript(ytVideoId);
+                            } catch (e) {
+                                if (!e.message?.includes('being generated')) throw e;
+                                // Gemini background job started — poll status until ready
+                                const SERVER_HOST = window.location.protocol === 'file:' ? 'localhost' : window.location.hostname;
+                                const LOCAL_SERVER = (window.location.port === '' || window.location.port === '80')
+                                    ? window.location.origin
+                                    : `http://${SERVER_HOST}:3456`;
+                                const maxAttempts = 60; // up to 5 minutes
+                                for (let i = 0; i < maxAttempts; i++) {
+                                    await new Promise(r => setTimeout(r, 5000));
+                                    const statusRes = await fetch(`${LOCAL_SERVER}/api/transcript/status?v=${ytVideoId}`);
+                                    const status = await statusRes.json();
+                                    if (status.hasCached) return await fetchTranscript(ytVideoId);
+                                    if (status.failedJob && !status.isPending) {
+                                        throw new Error(`Transcript generation failed: ${status.failedJob.lastError || 'unknown error'}`);
+                                    }
+                                }
+                                throw new Error('Transcript generation timed out after 5 minutes.');
+                            }
+                        };
+                        transcript = await fetchWithPoll();
                         if (transcript) {
                             setCachedTranscript({ videoId: ytVideoId, data: transcript });
                         }
@@ -8617,7 +8640,7 @@ Third subtitle text`}
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.14</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.15</p>
                                             </div>
                                         )}
                                     </div>
