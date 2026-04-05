@@ -2131,19 +2131,6 @@ Only return the JSON object, no other text.`;
                                 <span>{formatPublishDate(video.publishDate)}</span>
                             </div>
                         ) : null}
-                        {(!video.publishDate || !video.description) && (video.sourceType === 'youtube' || (!video.sourceType && video.videoId)) && (
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onFetchPublishDate(video.id, video.videoId);
-                                }}
-                                disabled={isFetchingDate}
-                                className="flex items-center gap-1 text-blue-400 hover:text-blue-300 disabled:opacity-50"
-                            >
-                                <Icons.Calendar />
-                                <span>{isFetchingDate ? 'Fetching...' : 'Get Details'}</span>
-                            </button>
-                        )}
                     </div>
                 </div>
             </div>
@@ -2216,19 +2203,6 @@ Only return the JSON object, no other text.`;
                                     <Icons.Calendar />
                                     <span>{formatPublishDate(video.publishDate)}</span>
                                 </div>
-                            )}
-                            {(!video.publishDate || !video.description) && (sourceType === 'youtube' || (!video.sourceType && video.videoId)) && (
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onFetchPublishDate(video.id, video.videoId);
-                                    }}
-                                    disabled={isFetchingDate}
-                                    className="flex items-center gap-1 text-blue-400 hover:text-blue-300 disabled:opacity-50"
-                                >
-                                    <Icons.Calendar />
-                                    <span>{isFetchingDate ? 'Fetching...' : 'Get Details'}</span>
-                                </button>
                             )}
                             <div className="flex items-center gap-1">
                                 <Icons.Eye />
@@ -2405,6 +2379,7 @@ Only return the JSON object, no other text.`;
 
                         const data = await response.json();
                         const videoTitle = data.title || '';
+                        const channelName = data.author_name || '';
 
                         setTitle(videoTitle);
                         setThumbnail(`https://img.youtube.com/vi/${parsedSource.sourceId}/mqdefault.jpg`);
@@ -2413,10 +2388,17 @@ Only return the JSON object, no other text.`;
                         const autoTags = extractTagsFromTitle(videoTitle);
                         setTags(autoTags.join(', '));
 
-                        // Auto-suggest category
-                        const suggestedCategory = suggestCategory(videoTitle, categories);
-                        if (suggestedCategory) {
-                            setSelectedCategory(suggestedCategory);
+                        // Auto-assign category: first try matching channel name, then suggest from title
+                        const channelMatchedCategory = channelName
+                            ? categories.find(c => c.name.toLowerCase() === channelName.toLowerCase())
+                            : null;
+                        if (channelMatchedCategory) {
+                            setSelectedCategory(channelMatchedCategory.id);
+                        } else {
+                            const suggestedCategory = suggestCategory(videoTitle, categories);
+                            if (suggestedCategory) {
+                                setSelectedCategory(suggestedCategory);
+                            }
                         }
 
                         // Try to fetch publish date from noembed
@@ -2441,15 +2423,25 @@ Only return the JSON object, no other text.`;
 
                         if (response.ok) {
                             const data = await response.json();
-                            setTitle(data.title || '');
+                            const vimeoTitle = data.title || '';
+                            const vimeoAuthor = data.author_name || '';
+                            setTitle(vimeoTitle);
                             setThumbnail(data.thumbnail_url || '');
 
-                            const autoTags = extractTagsFromTitle(data.title || '');
+                            const autoTags = extractTagsFromTitle(vimeoTitle);
                             setTags(autoTags.join(', '));
 
-                            const suggestedCategory = suggestCategory(data.title || '', categories);
-                            if (suggestedCategory) {
-                                setSelectedCategory(suggestedCategory);
+                            // Auto-assign category: first try matching author/channel name, then suggest from title
+                            const vimeoChannelMatch = vimeoAuthor
+                                ? categories.find(c => c.name.toLowerCase() === vimeoAuthor.toLowerCase())
+                                : null;
+                            if (vimeoChannelMatch) {
+                                setSelectedCategory(vimeoChannelMatch.id);
+                            } else {
+                                const suggestedCategory = suggestCategory(vimeoTitle, categories);
+                                if (suggestedCategory) {
+                                    setSelectedCategory(suggestedCategory);
+                                }
                             }
 
                             setAutoFetched(true);
@@ -6714,8 +6706,35 @@ Third subtitle text`}
             ).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 
             // Video handlers
-            const handleAddVideo = (video) => {
+            const handleAddVideo = async (video) => {
                 setVideos(prev => [...prev, video]);
+
+                // Auto-fetch richer YouTube metadata (description, publish date, high-res thumbnail)
+                // silently in the background after the video is added
+                const youtubeId = video.sourceType === 'youtube' ? video.sourceId : (video.videoId || null);
+                if (youtubeId && apiStatus.youtubeConfigured) {
+                    try {
+                        const response = await fetch(
+                            `${SERVER_URL}/api/youtube/video?id=${youtubeId}`,
+                            { headers: { 'Authorization': `Bearer ${authToken}` } }
+                        );
+                        const data = await response.json();
+                        if (!data.error) {
+                            const updates = {};
+                            if (data.publishedAt) updates.publishDate = data.publishedAt.split('T')[0];
+                            if (data.description) updates.description = data.description;
+                            if (data.thumbnails?.maxres?.url || data.thumbnails?.high?.url) {
+                                updates.thumbnail = data.thumbnails.maxres?.url || data.thumbnails.high.url;
+                            }
+                            if (Object.keys(updates).length > 0) {
+                                setVideos(prev => prev.map(v => v.id === video.id ? { ...v, ...updates } : v));
+                                console.log('✅ Auto-fetched YouTube metadata for', video.id);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('⚠️ Could not auto-fetch YouTube metadata:', e.message);
+                    }
+                }
             };
 
             const handleDeleteVideo = async (id) => {
@@ -7689,10 +7708,19 @@ Third subtitle text`}
                     <header className="bg-gray-800 border-b border-gray-700 px-4 py-2.5 flex items-center gap-3 shrink-0">
 
                         {/* Group 1: Logo */}
-                        <div className="flex items-center gap-2.5 shrink-0">
+                        <button
+                            className="flex items-center gap-2.5 shrink-0 hover:opacity-80 transition-opacity"
+                            onClick={() => {
+                                setActiveVideoId(null);
+                                setActiveSharedVideo(null);
+                                setShowSharedWithMe(false);
+                                setShowLibrary(true);
+                            }}
+                            title="Go to library"
+                        >
                             <img src="logos/clipmark-favicon.svg" alt="ClipMark" className="w-8 h-8" />
                             <h1 className="text-xl font-bold text-emerald-500" style={{fontFamily: "'Syne', sans-serif"}}>ClipMark</h1>
-                        </div>
+                        </button>
 
                         {/* Spacer */}
                         <div className="flex-1" />
@@ -8589,7 +8617,7 @@ Third subtitle text`}
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.13</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.14</p>
                                             </div>
                                         )}
                                     </div>
