@@ -8631,7 +8631,7 @@ Third subtitle text`}
                                 /* Video Player View */
                                 <div className={`flex-1 flex overflow-hidden ${(isMobile || isTablet) ? 'flex-col' : ''}`}>
                                     {/* Player Area - shown when not on notes tab (mobile) */}
-                                    <div className={`flex-1 flex flex-col ${isMobile ? 'p-2' : 'p-4'} overflow-hidden ${isMobile && mobileActiveTab === 'notes' ? 'hidden' : ''}`}>
+                                    <div className={`${isTablet ? 'shrink-0' : 'flex-1'} flex flex-col ${isMobile ? 'p-2' : 'p-4'} ${isTablet ? 'overflow-hidden' : 'overflow-hidden'} ${isMobile && mobileActiveTab === 'notes' ? 'hidden' : ''}`}>
                                         {/* Video Player - Smaller size */}
                                         <div className={`w-full ${(isMobile || isTablet) ? '' : (sidebarCollapsed ? 'max-w-5xl' : 'max-w-3xl')} mx-auto shrink-0 ${isMobile ? 'mb-2' : 'mb-4'} transition-all duration-200`}>
                                             <div className="aspect-video bg-black rounded-lg overflow-hidden">
@@ -8784,7 +8784,7 @@ Third subtitle text`}
 
                                         {/* Video Info & Note Input */}
                                         {displayVideo && (
-                                            <div className={`w-full ${(isMobile || isTablet) ? '' : (sidebarCollapsed ? 'max-w-5xl' : 'max-w-3xl')} mx-auto flex-1 overflow-y-auto min-h-0 transition-all duration-200`}>
+                                            <div className={`w-full ${(isMobile || isTablet) ? '' : (sidebarCollapsed ? 'max-w-5xl' : 'max-w-3xl')} mx-auto ${isTablet ? 'shrink-0' : 'flex-1 overflow-y-auto min-h-0'} transition-all duration-200`}>
                                                 <div className={`flex items-start justify-between ${isMobile ? 'mb-2' : 'mb-4'}`}>
                                                     <div className="min-w-0 flex-1">
                                                         <h2 className={`${isMobile ? 'text-base' : 'text-xl'} font-semibold truncate`}>{displayVideo.title}</h2>
@@ -8945,10 +8945,9 @@ Third subtitle text`}
                                                 isMobile
                                                     ? `flex-1 bg-gray-800 flex flex-col overflow-hidden ${mobileActiveTab === 'notes' ? '' : 'hidden'}`
                                                     : isTablet
-                                                        ? 'bg-gray-800 border-t border-gray-700 flex flex-col shrink-0'
+                                                        ? 'flex-1 bg-gray-800 border-t border-gray-700 flex flex-col overflow-hidden min-h-0'
                                                         : 'w-80 bg-gray-800 border-l border-gray-700 flex flex-col shrink-0'
                                             }
-                                            style={isTablet ? {height: '40vh'} : undefined}
                                         >
                                             <div className="p-4 border-b border-gray-700 flex items-center justify-between">
                                                 <h3 className="font-semibold">Notes ({displayVideo.notes?.length || 0})</h3>
