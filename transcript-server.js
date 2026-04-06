@@ -2081,8 +2081,13 @@ async function getTranscriptViaGemini(videoId) {
             }
 
             if (response.status !== 200) {
-                console.log(`Gemini ${model} returned ${response.status}: ${response.data?.substring(0, 300)}`);
-                lastError = new Error(`Gemini API HTTP ${response.status}`);
+                let errDetail = response.data?.substring(0, 300) || '';
+                try {
+                    const errData = JSON.parse(response.data);
+                    errDetail = errData?.error?.message || errDetail;
+                } catch (_) {}
+                console.log(`Gemini ${model} returned ${response.status}: ${errDetail}`);
+                lastError = new Error(`Gemini API HTTP ${response.status}: ${errDetail}`);
                 continue;
             }
 
@@ -2226,7 +2231,21 @@ async function getTranscript(videoId) {
         console.log(`Timedtext fast path failed: ${e.message} — falling back to Gemini`);
     }
 
-    // Method 2: Innertube caption extraction — parses caption track URLs from the page.
+    // Method 2: yt-dlp subtitle download — works from any IP, handles YouTube auth.
+    // Uses the local yt-dlp binary to download auto-generated subtitles as json3.
+    try {
+        console.log(`Attempting yt-dlp method for ${videoId}...`);
+        const transcript = await getTranscriptYtDlp(videoId);
+        if (transcript && transcript.length > 0) {
+            console.log(`✅ Got ${transcript.length} segments via yt-dlp`);
+            cacheTranscript(videoId, transcript);
+            return transcript;
+        }
+    } catch (e) {
+        console.log(`yt-dlp method failed: ${e.message} — falling back to innertube`);
+    }
+
+    // Method 3: Innertube caption extraction — parses caption track URLs from the page.
     // Also falls back to Gemini on failure since datacenter IPs may be blocked.
     try {
         console.log(`Attempting innertube method for ${videoId}...`);
@@ -2240,7 +2259,7 @@ async function getTranscript(videoId) {
         console.log(`Innertube method failed: ${e.message} — falling back to Gemini`);
     }
 
-    // Method 3: Gemini API — reliable from any IP, but slow (30-60s for background job).
+    // Method 4: Gemini API — reliable from any IP, but slow (30-60s for background job).
     // Start as background job to avoid Cloudflare 100s timeout on long videos.
     if (GEMINI_API_KEY && !pendingGeminiJobs.has(videoId)) {
         const attemptNum = (failedJob?.attempts || 0) + 1;

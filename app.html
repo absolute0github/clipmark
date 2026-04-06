@@ -2357,6 +2357,11 @@ Only return the JSON object, no other text.`;
             const [newCategoryName, setNewCategoryName] = useState('');
             const [categoryError, setCategoryError] = useState('');
             const [detectedSource, setDetectedSource] = useState(null); // { sourceType, sourceId, sourceUrl }
+            const [metaDebugLog, setMetaDebugLog] = useState([]);
+            const addMetaDebug = (msg) => {
+                const ts = new Date().toISOString().substring(11, 23);
+                setMetaDebugLog(prev => [...prev.slice(-49), `[${ts}] ${msg}`]);
+            };
             const [thumbnail, setThumbnail] = useState(''); // For non-YouTube sources
 
             // Fetch video metadata based on source type
@@ -2365,19 +2370,22 @@ Only return the JSON object, no other text.`;
 
                 setIsLoading(true);
                 setError('');
+                addMetaDebug(`fetchVideoMetadata — sourceType=${parsedSource.sourceType} sourceId=${parsedSource.sourceId || 'n/a'} sourceUrl=${parsedSource.sourceUrl || 'n/a'}`);
 
                 try {
                     if (parsedSource.sourceType === 'youtube') {
                         // Use YouTube oEmbed API (no API key required)
-                        const response = await fetch(
-                            `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${parsedSource.sourceId}&format=json`
-                        );
+                        const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${parsedSource.sourceId}&format=json`;
+                        addMetaDebug(`→ fetching YouTube oEmbed: ${oembedUrl}`);
+                        const response = await fetch(oembedUrl);
+                        addMetaDebug(`← oEmbed response: HTTP ${response.status}`);
 
                         if (!response.ok) {
-                            throw new Error('Could not fetch video info');
+                            throw new Error(`Could not fetch video info (HTTP ${response.status})`);
                         }
 
                         const data = await response.json();
+                        addMetaDebug(`← oEmbed data: title="${data.title}" author="${data.author_name}"`);
                         const videoTitle = data.title || '';
                         const channelName = data.author_name || '';
 
@@ -2403,23 +2411,28 @@ Only return the JSON object, no other text.`;
 
                         // Try to fetch publish date from noembed
                         try {
+                            addMetaDebug('→ fetching noembed for publish date');
                             const noembedResponse = await fetch(
                                 `https://noembed.com/embed?url=https://www.youtube.com/watch?v=${parsedSource.sourceId}`
                             );
                             const noembedData = await noembedResponse.json();
+                            addMetaDebug(`← noembed: upload_date="${noembedData.upload_date || 'none'}"`);
                             if (noembedData.upload_date) {
                                 setPublishDate(noembedData.upload_date);
                             }
                         } catch (e) {
+                            addMetaDebug(`← noembed error: ${e.message}`);
                             console.log('Could not fetch publish date');
                         }
 
                         setAutoFetched(true);
                     } else if (parsedSource.sourceType === 'vimeo') {
                         // Use Vimeo oEmbed API
+                        addMetaDebug(`→ fetching Vimeo oEmbed for id=${parsedSource.sourceId}`);
                         const response = await fetch(
                             `https://vimeo.com/api/oembed.json?url=https://vimeo.com/${parsedSource.sourceId}`
                         );
+                        addMetaDebug(`← Vimeo oEmbed: HTTP ${response.status}`);
 
                         if (response.ok) {
                             const data = await response.json();
@@ -2490,10 +2503,12 @@ Only return the JSON object, no other text.`;
                         setTitle(filename || 'Direct Video');
                     }
                 } catch (err) {
+                    addMetaDebug(`CATCH: ${err.message}`);
                     console.log('Could not auto-fetch metadata:', err);
                     // Don't show error - just leave fields empty for manual entry
                 } finally {
                     setIsLoading(false);
+                    addMetaDebug('fetchVideoMetadata done');
                 }
             };
 
@@ -2653,6 +2668,20 @@ Only return the JSON object, no other text.`;
                                         </svg>
                                         Auto-filled from video
                                     </p>
+                                )}
+                                {/* Metadata Debug Panel */}
+                                {metaDebugLog.length > 0 && (
+                                    <div className="mt-2 border border-yellow-600 rounded-lg bg-gray-900 text-xs font-mono">
+                                        <div className="flex items-center justify-between px-3 py-1 border-b border-yellow-600 bg-yellow-900/20">
+                                            <span className="text-yellow-400 font-semibold">⚙ Metadata Fetch Debug</span>
+                                            <button onClick={() => setMetaDebugLog([])} className="text-gray-400 hover:text-white transition-colors">Clear</button>
+                                        </div>
+                                        <div className="p-2 max-h-36 overflow-y-auto space-y-0.5">
+                                            {metaDebugLog.map((line, i) => (
+                                                <p key={i} className={`break-all leading-tight ${line.includes('CATCH') || line.includes('error') ? 'text-red-400' : line.includes('←') ? 'text-blue-300' : line.includes('→') ? 'text-yellow-300' : 'text-green-300'}`}>{line}</p>
+                                            ))}
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                             <div>
@@ -5657,6 +5686,12 @@ Third subtitle text`}
             const [contextWordCount, setContextWordCount] = useState(10);
             const [cachedTranscript, setCachedTranscript] = useState(null);
             const [isLoadingContext, setIsLoadingContext] = useState(false);
+            const [debugLog, setDebugLog] = useState([]);
+            const [showDebugPanel, setShowDebugPanel] = useState(false);
+            const addDebugLog = (msg) => {
+                const ts = new Date().toISOString().substring(11, 23);
+                setDebugLog(prev => [...prev.slice(-99), `[${ts}] ${msg}`]);
+            };
             const [showFullDescription, setShowFullDescription] = useState(false);
             const [fetchingDateFor, setFetchingDateFor] = useState(null);
             const [editingVideo, setEditingVideo] = useState(null);
@@ -6486,6 +6521,8 @@ Third subtitle text`}
                     ? video.youtubeVideoId
                     : (video.videoId || (video.sourceType === 'youtube' ? video.sourceId : null));
 
+                addDebugLog(`handleLoadContext start — videoId=${video.videoId || 'n/a'} sourceId=${video.sourceId || 'n/a'} sourceType=${video.sourceType || 'n/a'} resolvedYtId=${ytVideoId || 'NONE'} hasStoredTranscript=${!!video.transcript?.segments?.length}`);
+                setShowDebugPanel(true);
                 console.log('⚡ handleLoadContext:', {
                     videoId: video.videoId, sourceId: video.sourceId, sourceType: video.sourceType,
                     resolved: ytVideoId, hasStoredTranscript: !!video.transcript
@@ -6534,6 +6571,7 @@ Third subtitle text`}
                         try {
                             const statusRes = await fetch(`${LOCAL_SERVER}/api/transcript/status?v=${ytVideoId}`);
                             const status = await statusRes.json();
+                            addDebugLog(`poll ${i + 1}/${maxAttempts}: hasCached=${status.hasCached} isPending=${status.isPending} failedJob=${status.failedJob ? JSON.stringify(status.failedJob).substring(0, 200) : 'null'}`);
                             console.log(`⚡ Transcript poll ${i + 1}/${maxAttempts}:`, status);
                             if (status.hasCached) {
                                 const transcript = await fetchTranscript(ytVideoId);
@@ -6541,10 +6579,12 @@ Third subtitle text`}
                                 return;
                             }
                             if (status.failedJob && !status.isPending) {
+                                addDebugLog(`FAILED: ${status.failedJob.lastError || 'unknown error'}`);
                                 setNewNote(`[AI transcription failed: ${status.failedJob.lastError || 'unknown error'}. Try uploading an SRT/VTT file.]`);
                                 return;
                             }
                         } catch (e) {
+                            addDebugLog(`poll error: ${e.message}`);
                             console.log('⚡ Poll error (continuing):', e.message);
                         }
                     }
@@ -6557,25 +6597,33 @@ Third subtitle text`}
                     // Use cached transcript or fetch new one
                     let transcript = cachedTranscript;
                     if (!transcript || cachedTranscript?.videoId !== ytVideoId) {
+                        addDebugLog(`fetching transcript from server for ytId=${ytVideoId}`);
                         console.log('⚡ Fetching transcript for:', ytVideoId);
                         transcript = await fetchTranscript(ytVideoId);
+                        addDebugLog(`fetchTranscript returned: ${transcript ? `${transcript.length} segments` : 'null'}`);
                         console.log('⚡ fetchTranscript returned:', transcript ? `${transcript.length} segments` : 'null');
                         applyTranscript(transcript);
                     } else {
+                        addDebugLog(`using cached transcript (${cachedTranscript.data?.length} segments)`);
                         applyTranscript(cachedTranscript.data);
                     }
                 } catch (error) {
+                    addDebugLog(`catch error: "${error.message}"`);
                     console.error('Error loading transcript context:', error);
                     if (error.message?.includes('being generated')) {
                         // Gemini background job is running — auto-poll until ready
+                        addDebugLog('→ job still generating, entering poll loop');
                         pollingActive = true;
                         pollUntilReady().finally(() => setIsLoadingContext(false));
                     } else if (error.message?.includes('rate limit') || error.message?.includes('empty responses')) {
+                        addDebugLog('→ rate limit path');
                         setNewNote('[YouTube rate limited. Please try again in a few minutes.]');
                     } else if (error.message?.includes('No captions')) {
+                        addDebugLog('→ no captions path');
                         setTranscriptUnavailable(true);
                         setNewNote(`[${error.message.includes('failed after') ? error.message : 'This video does not have captions/subtitles available'}. Try uploading an SRT/VTT file instead.]`);
                     } else {
+                        addDebugLog('→ generic error path');
                         setNewNote('[Error loading transcript. Make sure the transcript server is running.]');
                     }
                 } finally {
@@ -6793,6 +6841,27 @@ Third subtitle text`}
                 setShowSharedWithMe(false);
                 setNoteSearch('');
                 setTranscriptUnavailable(false);
+
+                // Backfill missing description/metadata for older YouTube videos
+                const video = videos.find(v => v.id === videoId);
+                const youtubeId = video?.sourceType === 'youtube' ? video.sourceId : (video?.videoId || null);
+                if (youtubeId && !video?.description && apiStatus.youtubeConfigured) {
+                    fetch(`${SERVER_URL}/api/youtube/video?id=${youtubeId}`, {
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    }).then(r => r.json()).then(data => {
+                        if (!data.error) {
+                            const updates = {};
+                            if (data.description) updates.description = data.description;
+                            if (data.publishedAt && !video.publishDate) updates.publishDate = data.publishedAt.split('T')[0];
+                            if (!video.thumbnail && (data.thumbnails?.maxres?.url || data.thumbnails?.high?.url)) {
+                                updates.thumbnail = data.thumbnails.maxres?.url || data.thumbnails.high.url;
+                            }
+                            if (Object.keys(updates).length > 0) {
+                                setVideos(prev => prev.map(v => v.id === videoId ? { ...v, ...updates } : v));
+                            }
+                        }
+                    }).catch(() => {});
+                }
             };
 
             const handleNavigateToNote = (videoId, timestamp) => {
@@ -6879,7 +6948,7 @@ Third subtitle text`}
 
                     if (data.error) {
                         console.error('YouTube API error:', data.error);
-                        alert(`Error: ${data.error}`);
+                        alert(`Error: ${data.error?.message || JSON.stringify(data.error)}`);
                         setFetchingDateFor(null);
                         return;
                     }
@@ -8640,7 +8709,33 @@ Third subtitle text`}
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.16</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.18</p>
+
+                                                {/* Debug Panel */}
+                                                {showDebugPanel && (
+                                                    <div className="mt-3 border border-yellow-600 rounded-lg bg-gray-900 text-xs font-mono">
+                                                        <div className="flex items-center justify-between px-3 py-1 border-b border-yellow-600 bg-yellow-900/20">
+                                                            <span className="text-yellow-400 font-semibold">⚙ Debug Log</span>
+                                                            <div className="flex gap-2">
+                                                                <button onClick={() => setDebugLog([])} className="text-gray-400 hover:text-white transition-colors">Clear</button>
+                                                                <button onClick={() => setShowDebugPanel(false)} className="text-gray-400 hover:text-white transition-colors">✕</button>
+                                                            </div>
+                                                        </div>
+                                                        <div className="p-2 max-h-48 overflow-y-auto space-y-0.5">
+                                                            {debugLog.length === 0
+                                                                ? <p className="text-gray-500 italic">No events yet. Click "Get Context" to start.</p>
+                                                                : debugLog.map((line, i) => (
+                                                                    <p key={i} className={`break-all leading-tight ${line.includes('FAILED') || line.includes('error') ? 'text-red-400' : line.includes('→') ? 'text-yellow-300' : 'text-green-300'}`}>{line}</p>
+                                                                ))
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {!showDebugPanel && (
+                                                    <div className="text-center mt-2">
+                                                        <button onClick={() => setShowDebugPanel(true)} className="text-xs text-gray-600 hover:text-gray-400 transition-colors">⚙ Show Debug Panel</button>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
