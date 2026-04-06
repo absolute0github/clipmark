@@ -8966,7 +8966,7 @@ Third subtitle text`}
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.21</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.22</p>
 
                                                 {/* Debug Panel */}
                                                 {showDebugPanel && (
@@ -8988,7 +8988,7 @@ Third subtitle text`}
                                                         </div>
                                                     </div>
                                                 )}
-                                                {!showDebugPanel && (
+                                                {!showDebugPanel && localStorage.getItem('ytBookmarks_debugMetaFetch') === 'true' && (
                                                     <div className="text-center mt-2">
                                                         <button onClick={() => setShowDebugPanel(true)} className="text-xs text-gray-600 hover:text-gray-400 transition-colors">⚙ Show Debug Panel</button>
                                                     </div>
