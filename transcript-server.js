@@ -1709,8 +1709,16 @@ async function getTranscriptYtDlp(videoId) {
             '--sub-lang', 'en',
             '--sub-format', 'json3',
             '-o', outputTemplate,
-            `https://www.youtube.com/watch?v=${videoId}`
         ];
+
+        // Use cookies file if available (required for Hetzner/datacenter IPs to bypass bot detection)
+        const cookiesFile = process.env.YOUTUBE_COOKIES_FILE || path.join(__dirname, 'youtube-cookies.txt');
+        if (fs.existsSync(cookiesFile)) {
+            args.push('--cookies', cookiesFile);
+            console.log(`Using cookies file: ${cookiesFile}`);
+        }
+
+        args.push(`https://www.youtube.com/watch?v=${videoId}`);
 
         execFile(ytdlp, args, { timeout: 30000 }, (error, stdout, stderr) => {
             if (error) {
