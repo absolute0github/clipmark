@@ -35,6 +35,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Backup & Restore**: Export structured backup JSON with metadata; import with merge (deduplicate) or replace strategy via preview modal
 - **Quick-Add API**: External endpoint (`POST /api/clips/quick-add`) for adding videos from URLs with auto-metadata fetching
 - **Chrome Extension**: "ClipMark - Save to Library" — one-click video saving from YouTube with timestamp capture and optional notes
+- **Mobile/Tablet Responsive Layout**: Fully responsive design with hamburger menu, slide-over sidebar drawer, bottom tab navigation on mobile, stacked player/notes on tablet portrait, and touch-friendly controls
 
 ## Architecture
 

@@ -4,6 +4,21 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] - 2026-04-06
+
+### Added
+- **Mobile/Tablet Responsive Layout** — Complete responsive design overhaul for phones and tablets:
+  - **Mobile (<=768px)**: Hamburger menu replaces utility buttons in header; sidebar becomes a slide-over drawer with overlay backdrop; video player and notes panel switch via bottom tab navigation (Player/Notes/Library tabs); note input stacks vertically with side-by-side action buttons; enhancement toolbar wraps to multiple rows; compact spacing throughout
+  - **Tablet (769-1024px)**: Same slide-over sidebar drawer as mobile; video player and notes panel stack vertically (player on top, notes panel at 40vh below); full header utility buttons remain visible
+  - **Desktop (>1024px)**: No changes — existing layout preserved
+  - Mobile sidebar drawer includes user chip, settings, refresh, and logout buttons
+  - iOS safe area support for home indicator/notch
+  - Auto-closes sidebar drawer when selecting a video or resizing to desktop
+
+### Files Modified
+- `app.html` — Added CSS media queries for mobile/tablet breakpoints; added `isMobile`/`isTablet`/`mobileMenuOpen`/`mobileActiveTab` state with resize listener; responsive header with hamburger menu; sidebar converted to slide-over drawer with overlay; video player view stacks vertically on mobile/tablet; enhancement toolbar wraps on small screens; note input stacks vertically on mobile; bottom tab navigation bar for mobile; library padding adjusts for mobile
+- `CLAUDE.md` — Added Mobile/Tablet Responsive Layout to Key Features
+
 ## [Unreleased] - 2026-04-05
 
 ### Added
