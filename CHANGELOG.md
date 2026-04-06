@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased] - 2026-04-06
 
 ### Added
+- **Generate AI Report (premium)** — New "AI Report" button in the notes toolbar generates a structured Gemini-powered report for the active video. Report includes four sections: Summary, Key Takeaways, Action Items, and Notes (with original timestamps preserved). Transcript context is fetched and woven in automatically when available; the feature degrades gracefully without it. Report renders in a full-screen modal with section-color-coded cards, a "Copy to Clipboard" action, and a "Download .md" action. Gated behind `subscription.status === 'active'`; non-subscribers see a lock icon and a prompt to upgrade.
+  - New `VideoReportModal` component with loading spinner, error+retry state, and simple markdown section renderer
+  - New `handleGenerateReport` async function: checks subscription, fetches transcript with cache reuse, builds Gemini prompt, calls `/api/gemini`, sets modal state
+  - Four new state variables: `showReportModal`, `reportContent`, `isGeneratingReport`, `reportError`
+
+### Files Modified
+- `app.html` — Added `VideoReportModal` component (~170 lines, after `EnhancementReviewModal`); added `handleGenerateReport` function (after `handleEnhanceAllNotes`); added four state variables near subscription state; added "AI Report" button to notes toolbar after "Download .md"; added `<VideoReportModal>` render at bottom of `App` component
+
 - **Mobile/Tablet Responsive Layout** — Complete responsive design overhaul for phones and tablets:
   - **Mobile (<=768px)**: Hamburger menu replaces utility buttons in header; sidebar becomes a slide-over drawer with overlay backdrop; video player and notes panel switch via bottom tab navigation (Player/Notes/Library tabs); note input stacks vertically with side-by-side action buttons; enhancement toolbar wraps to multiple rows; compact spacing throughout
   - **Tablet (769-1024px)**: Same slide-over sidebar drawer as mobile; video player and notes panel stack vertically (player on top, notes panel at 40vh below); full header utility buttons remain visible
@@ -29,7 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Files Modified
 - `app.html` — `fetchVideoMetadata`: channel name matched against categories before title-based suggestion; `handleAddVideo`: made async, auto-fetches YouTube API metadata after add; VideoCard/VideoListItem: removed "Get Details" button; header logo wrapped in `<button>` with onClick to navigate home
 
-## [3.4.22] - 2026-04-06
+## [3.4.23] - 2026-04-06
 
 ### Fixed
 - **Deleted videos returning after page refresh** — Two-part race condition: (1) `handleDeleteVideo` was fire-and-forgetting the `DELETE /bookmarks/:id` request while immediately calling `setVideos()`, causing the debounced save effect (500ms) to fire a POST that raced the DELETE and re-added the video via the server's merge logic. Fixed by making `handleDeleteVideo` `async` and awaiting the server DELETE before updating React state. (2) The POST `/bookmarks` merge on the server was unconditionally re-adding any video present on the server but absent from the incoming payload ("server-only videos"), which defeated a successful DELETE whenever a subsequent sync arrived. Fixed by dropping server-only videos (treating the client payload as authoritative — the client holds the post-delete truth).
@@ -38,7 +46,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `app.html` — `handleDeleteVideo` made `async`; server DELETE is now awaited before `setVideos()` so the debounced save cannot race the deletion
 - `transcript-server.js` — POST `/bookmarks` merge: server-only videos (not in incoming payload) are now dropped instead of unconditionally re-added
 
-## [3.4.22] - 2026-04-06
+## [3.4.23] - 2026-04-06
 
 ### Fixed
 - **"Get Context" no longer requires a second manual click for AI-generated transcripts** — On production (Hetzner), YouTube's timedtext and innertube APIs fail due to bot detection, so Gemini is always used as a background job. Previously this showed a "click again in 30-60 seconds" message. Now the button stays in loading state and automatically polls `/api/transcript/status` every 5 seconds until the transcript is ready, then applies it to the note field without any user action. Polling times out after 5 minutes.
