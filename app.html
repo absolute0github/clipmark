@@ -575,38 +575,35 @@ Only return the JSON array, no other text. If no meaningful tips are found, retu
             return tips;
         };
 
-        // AI function to summarize a note with transcript context (via server proxy)
-        const summarizeNoteWithContext = async (contextText, originalNote, serverUrl, authToken) => {
-            const prompt = `You are helping to enhance and clarify notes taken while watching a video. Given the transcript context and the original note, create a clear, bullet-point summary that captures the complete thought.
+        // AI function to enhance all notes in a single batch API call (via server proxy)
+        const enhanceNotesBatch = async (notesWithContext, serverUrl, authToken) => {
+            // notesWithContext: [{ id, text, context }]
+            const notesJson = JSON.stringify(notesWithContext.map(n => ({
+                id: n.id,
+                note: n.text,
+                context: n.context
+            })));
 
-Transcript context (words surrounding the note timestamp):
-"${contextText}"
+            const prompt = `You are enhancing notes taken while watching a video. For each note, use its transcript context to create a clear, concise bullet-point summary.
 
-Original note:
-"${originalNote}"
+Notes to enhance:
+${notesJson}
 
 Instructions:
-1. Understand what topic or idea the note is referring to based on the transcript context
-2. Create a concise bullet-point summary (1-3 bullets) that captures the complete thought
-3. Each bullet should start with "- " and be on its own line
-4. If the context is unclear or could have multiple interpretations, flag this as ambiguous
-5. If ambiguous, provide 2-3 alternative interpretations as separate summaries
+1. For each note, understand the topic based on the transcript context
+2. Create a concise bullet-point summary (1-3 bullets), each starting with "- " on its own line
+3. If a note's context is unclear or has multiple interpretations, set isAmbiguous to true and provide 2-3 alternative summaries in alternatives
+4. Preserve the input order in your output
 
-Return your response as a JSON object with this exact format:
-{
-  "summary": "- First bullet point\\n- Second bullet point",
-  "isAmbiguous": false,
-  "alternatives": null
-}
+Return a JSON array with this exact structure (one entry per input note, in order):
+[
+  { "id": "<note id>", "summary": "- Bullet 1\\n- Bullet 2", "isAmbiguous": false, "alternatives": null },
+  { "id": "<note id>", "summary": "- Most likely interpretation", "isAmbiguous": true, "alternatives": ["- Alt 1", "- Alt 2"] }
+]
 
-OR if ambiguous:
-{
-  "summary": "- Most likely interpretation bullet",
-  "isAmbiguous": true,
-  "alternatives": ["- Alternative interpretation 1", "- Alternative interpretation 2"]
-}
+Only return the JSON array, no other text.`;
 
-Only return the JSON object, no other text.`;
+            const maxTokens = Math.min(500 + notesWithContext.length * 250, 8192);
 
             const response = await fetch(`${serverUrl}/api/gemini`, {
                 method: 'POST',
@@ -614,7 +611,7 @@ Only return the JSON object, no other text.`;
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${authToken}`
                 },
-                body: JSON.stringify({ prompt, maxTokens: 1024, temperature: 0.3 })
+                body: JSON.stringify({ prompt, maxTokens, temperature: 0.3, model: 'gemini-2.0-flash' })
             });
 
             if (!response.ok) {
@@ -625,29 +622,23 @@ Only return the JSON object, no other text.`;
             const data = await response.json();
             const responseText = data.text || '';
 
-            // Extract JSON from response (handle markdown code blocks)
+            // Extract JSON array from response (handle markdown code blocks)
             let jsonStr = responseText;
             const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
             if (jsonMatch) {
                 jsonStr = jsonMatch[1];
             }
 
-            // Clean and parse JSON
             jsonStr = jsonStr.trim();
-            if (!jsonStr.startsWith('{')) {
-                const objStart = jsonStr.indexOf('{');
-                const objEnd = jsonStr.lastIndexOf('}');
-                if (objStart !== -1 && objEnd !== -1) {
-                    jsonStr = jsonStr.substring(objStart, objEnd + 1);
+            if (!jsonStr.startsWith('[')) {
+                const arrStart = jsonStr.indexOf('[');
+                const arrEnd = jsonStr.lastIndexOf(']');
+                if (arrStart !== -1 && arrEnd !== -1) {
+                    jsonStr = jsonStr.substring(arrStart, arrEnd + 1);
                 }
             }
 
-            const result = JSON.parse(jsonStr);
-            return {
-                summary: result.summary || originalNote,
-                isAmbiguous: result.isAmbiguous || false,
-                alternatives: result.alternatives || null
-            };
+            return JSON.parse(jsonStr); // Array of { id, summary, isAmbiguous, alternatives }
         };
 
         // Function to fetch YouTube transcript using local proxy server
@@ -2359,6 +2350,7 @@ Only return the JSON object, no other text.`;
             const [detectedSource, setDetectedSource] = useState(null); // { sourceType, sourceId, sourceUrl }
             const [metaDebugLog, setMetaDebugLog] = useState([]);
             const addMetaDebug = (msg) => {
+                if (localStorage.getItem('ytBookmarks_debugMetaFetch') !== 'true') return;
                 const ts = new Date().toISOString().substring(11, 23);
                 setMetaDebugLog(prev => [...prev.slice(-49), `[${ts}] ${msg}`]);
             };
@@ -5012,6 +5004,7 @@ Third subtitle text`}
             const [expandedVideo, setExpandedVideo] = useState(null);
             const [graphMetric, setGraphMetric] = useState('apiCalls');
             const [showGraph, setShowGraph] = useState(true);
+            const [debugMetaFetch, setDebugMetaFetch] = useState(() => localStorage.getItem('ytBookmarks_debugMetaFetch') === 'true');
 
             useEffect(() => {
                 const fetchStats = async () => {
@@ -5272,6 +5265,17 @@ Third subtitle text`}
                                 title="Delete all users with usernames starting with 'test' and cancel their Stripe subscriptions"
                             >
                                 Purge Test Users
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const next = !debugMetaFetch;
+                                    setDebugMetaFetch(next);
+                                    localStorage.setItem('ytBookmarks_debugMetaFetch', next ? 'true' : 'false');
+                                }}
+                                className={`text-[10px] border px-2 py-1 rounded transition-colors ${debugMetaFetch ? 'text-yellow-400 border-yellow-600/50 hover:border-yellow-400' : 'text-gray-600 border-gray-700 hover:text-gray-400'}`}
+                                title="Toggle metadata fetch debug panel in Add Video modal"
+                            >
+                                {debugMetaFetch ? 'Debug: ON' : 'Debug: OFF'}
                             </button>
                             <span className="text-xs text-gray-500">{username}</span>
                             <a href="/" className="text-xs text-gray-400 hover:text-emerald-400 transition-colors">App</a>
@@ -6185,36 +6189,16 @@ Third subtitle text`}
                 loadData();
             }, []);
 
-            // Immediate save to localStorage and sessionStorage (no debounce)
+            // Immediate save to localStorage (categories only — videos live on server)
             const saveImmediately = useCallback((videosToSave, categoriesToSave) => {
-                // Save to localStorage immediately
+                // Save categories to localStorage immediately (lightweight, useful for instant render)
                 try {
-                    saveToStorage('ytBookmarks_videos', videosToSave, localStorage);
+                    saveToStorage('ytBookmarks_categories', categoriesToSave, localStorage);
                     setSaveStatus('saved');
                     setLastSaveTime(new Date());
                 } catch (e) {
-                    console.error('Failed to save videos to localStorage:', e.message);
-                    setSaveStatus('error');
-                }
-
-                // Save categories to localStorage immediately
-                try {
-                    saveToStorage('ytBookmarks_categories', categoriesToSave, localStorage);
-                } catch (e) {
                     console.error('Failed to save categories to localStorage:', e.message);
-                }
-
-                // Mirror to sessionStorage as backup
-                try {
-                    if (isStorageAvailable('sessionStorage')) {
-                        sessionStorage.setItem('ytBookmarks_backup', JSON.stringify({
-                            videos: videosToSave,
-                            categories: categoriesToSave,
-                            timestamp: Date.now()
-                        }));
-                    }
-                } catch (e) {
-                    console.warn('SessionStorage backup failed:', e.message);
+                    setSaveStatus('error');
                 }
             }, []);
 
@@ -6398,6 +6382,33 @@ Third subtitle text`}
                     document.removeEventListener('visibilitychange', handleVisibilityChange);
                 };
             }, [videos, categories, saveImmediately]);
+
+            // Re-fetch bookmarks from server when tab regains focus (picks up Chrome extension additions)
+            useEffect(() => {
+                const handleFocus = async () => {
+                    if (!authToken || !initialLoadCompleteRef.current) return;
+                    try {
+                        const response = await fetch(`${SERVER_URL}/bookmarks`, {
+                            headers: { 'Authorization': `Bearer ${authToken}` }
+                        });
+                        if (response.ok) {
+                            const serverData = await response.json();
+                            if (Array.isArray(serverData)) {
+                                const migrated = migrateVideosArray(serverData);
+                                setVideos(migrated);
+                                console.log('✅ Refreshed bookmarks on tab focus:', migrated.length);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Could not refresh bookmarks on focus:', e.message);
+                    }
+                };
+                const onVisibility = () => {
+                    if (document.visibilityState === 'visible') handleFocus();
+                };
+                document.addEventListener('visibilitychange', onVisibility);
+                return () => document.removeEventListener('visibilitychange', onVisibility);
+            }, [authToken, SERVER_URL]);
 
             // Save API key handlers
             const handleSaveGeminiApiKey = (key) => {
@@ -7306,72 +7317,119 @@ Third subtitle text`}
                     const enhancedNotes = [];
                     const ambiguousNotes = [];
 
-                    // Process each note
-                    for (let i = 0; i < video.notes.length; i++) {
-                        const note = video.notes[i];
-                        setEnhancementProgress({ current: i + 1, total: video.notes.length });
+                    // Build notes with transcript context
+                    const notesWithContext = [];
+                    const contextMap = new Map(); // noteId -> context string
+                    for (const note of video.notes) {
+                        const context = getExtendedTranscriptContext(transcript, note.timestamp, 75, 75);
+                        if (context) {
+                            notesWithContext.push({ id: note.id, text: note.text, context });
+                            contextMap.set(note.id, context);
+                        }
+                    }
 
+                    // Single batch API call for all notes
+                    let batchResults = null;
+                    if (notesWithContext.length > 0) {
                         try {
-                            // Get extended context around the note timestamp
-                            const context = getExtendedTranscriptContext(transcript, note.timestamp, 75, 75);
+                            batchResults = await enhanceNotesBatch(notesWithContext, SERVER_URL, authToken);
+                        } catch (batchError) {
+                            console.error('Batch enhancement failed, falling back to per-note processing:', batchError);
+                        }
+                    }
 
-                            if (!context) {
-                                // No context available, keep original
+                    if (batchResults) {
+                        // Map results by note ID
+                        const resultMap = new Map(batchResults.map(r => [r.id, r]));
+
+                        for (const note of video.notes) {
+                            const result = resultMap.get(note.id);
+                            if (!result) {
+                                // No context or missing from batch response — keep original
                                 enhancedNotes.push({ ...note });
                                 continue;
                             }
 
-                            // Call AI to summarize with retry logic
-                            let result = null;
-                            let retries = 3;
-                            while (retries > 0 && !result) {
-                                try {
-                                    result = await summarizeNoteWithContext(context, note.text, SERVER_URL, authToken);
-                                } catch (apiError) {
-                                    retries--;
-                                    if (retries > 0) {
-                                        // Wait with exponential backoff
-                                        await new Promise(resolve => setTimeout(resolve, 1000 * (4 - retries)));
-                                    } else {
-                                        console.error(`Failed to enhance note at ${formatTime(note.timestamp)}:`, apiError);
-                                        enhancedNotes.push({ ...note }); // Keep original on failure
-                                        continue;
+                            if (result.isAmbiguous && result.alternatives) {
+                                const context = contextMap.get(note.id) || '';
+                                ambiguousNotes.push({
+                                    noteId: note.id,
+                                    timestamp: note.timestamp,
+                                    originalText: note.text,
+                                    context: context.substring(0, 200) + '...',
+                                    suggestedSummary: result.summary,
+                                    alternatives: result.alternatives,
+                                    selectedOption: 0
+                                });
+                                enhancedNotes.push({ ...note }); // Keep original for now
+                            } else {
+                                enhancedNotes.push({
+                                    ...note,
+                                    text: result.summary,
+                                    enhanced: true,
+                                    originalText: note.originalText || note.text
+                                });
+                            }
+                        }
+                    } else {
+                        // Fallback: per-note sequential processing
+                        for (let i = 0; i < video.notes.length; i++) {
+                            const note = video.notes[i];
+                            setEnhancementProgress({ current: i + 1, total: video.notes.length });
+
+                            try {
+                                const context = contextMap.get(note.id);
+                                if (!context) {
+                                    enhancedNotes.push({ ...note });
+                                    continue;
+                                }
+
+                                let result = null;
+                                let retries = 3;
+                                while (retries > 0 && !result) {
+                                    try {
+                                        const batchOne = await enhanceNotesBatch([{ id: note.id, text: note.text, context }], SERVER_URL, authToken);
+                                        result = batchOne[0] || null;
+                                    } catch (apiError) {
+                                        retries--;
+                                        if (retries > 0) {
+                                            await new Promise(resolve => setTimeout(resolve, 1000 * (4 - retries)));
+                                        } else {
+                                            console.error(`Failed to enhance note at ${formatTime(note.timestamp)}:`, apiError);
+                                            enhancedNotes.push({ ...note });
+                                        }
                                     }
                                 }
-                            }
 
-                            if (result) {
-                                if (result.isAmbiguous && result.alternatives) {
-                                    // Flag for review
-                                    ambiguousNotes.push({
-                                        noteId: note.id,
-                                        timestamp: note.timestamp,
-                                        originalText: note.text,
-                                        context: context.substring(0, 200) + '...', // Truncate for display
-                                        suggestedSummary: result.summary,
-                                        alternatives: result.alternatives,
-                                        selectedOption: 0 // Default to first option (the suggestion)
-                                    });
-                                    enhancedNotes.push({ ...note }); // Keep original for now
+                                if (result) {
+                                    if (result.isAmbiguous && result.alternatives) {
+                                        ambiguousNotes.push({
+                                            noteId: note.id,
+                                            timestamp: note.timestamp,
+                                            originalText: note.text,
+                                            context: context.substring(0, 200) + '...',
+                                            suggestedSummary: result.summary,
+                                            alternatives: result.alternatives,
+                                            selectedOption: 0
+                                        });
+                                        enhancedNotes.push({ ...note });
+                                    } else {
+                                        enhancedNotes.push({
+                                            ...note,
+                                            text: result.summary,
+                                            enhanced: true,
+                                            originalText: note.originalText || note.text
+                                        });
+                                    }
                                 } else {
-                                    // Direct replacement - store original text
-                                    enhancedNotes.push({
-                                        ...note,
-                                        text: result.summary,
-                                        enhanced: true,
-                                        originalText: note.originalText || note.text // Preserve if already enhanced
-                                    });
+                                    enhancedNotes.push({ ...note });
                                 }
-                            } else {
+
+                                await new Promise(resolve => setTimeout(resolve, 500));
+                            } catch (error) {
+                                console.error(`Error enhancing note at ${formatTime(note.timestamp)}:`, error);
                                 enhancedNotes.push({ ...note });
                             }
-
-                            // Rate limiting delay between API calls
-                            await new Promise(resolve => setTimeout(resolve, 500));
-
-                        } catch (error) {
-                            console.error(`Error enhancing note at ${formatTime(note.timestamp)}:`, error);
-                            enhancedNotes.push({ ...note }); // Keep original on error
                         }
                     }
 
@@ -8466,7 +8524,7 @@ Third subtitle text`}
                                                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                                                     </svg>
-                                                                    Processing {enhancementProgress.current}/{enhancementProgress.total}...
+                                                                    {enhancementProgress.current > 0 ? `Processing ${enhancementProgress.current}/${enhancementProgress.total}...` : 'Enhancing...'}
                                                                 </>
                                                             ) : (
                                                                 <>
@@ -8709,7 +8767,7 @@ Third subtitle text`}
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.19</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.20</p>
 
                                                 {/* Debug Panel */}
                                                 {showDebugPanel && (

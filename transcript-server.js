@@ -4002,7 +4002,7 @@ const server = http.createServer(async (req, res) => {
 
         try {
             const body = await parseBody(req);
-            const { prompt, maxTokens = 2048, temperature = 0.3 } = body || {};
+            const { prompt, maxTokens = 2048, temperature = 0.3, model = 'gemini-2.0-flash' } = body || {};
 
             if (!prompt) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -4012,7 +4012,7 @@ const server = http.createServer(async (req, res) => {
 
             // Call Gemini API
             const geminiResponse = await fetchUrl(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+                `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
                 {
                     method: 'POST',
                     forceIPv4: true,
@@ -4358,9 +4358,10 @@ Format your response as JSON with a "message" field explaining this, and include
                         const inc = incomingMap.get(id);
 
                         if (!inc) {
-                            // Video only on server — client omitted it, so it was deleted; drop it.
-                            // The client is the authoritative source: if a video isn't in the
-                            // incoming payload it has been removed and should not be re-added.
+                            // Video only on server — keep it. Deletes happen via DELETE /bookmarks/:id.
+                            // Never infer a delete from the client not including a video; that would
+                            // silently destroy videos added by the Chrome extension or another session.
+                            merged.push(ext);
                         } else if (!ext) {
                             // Video only in incoming — add it
                             merged.push(inc);
