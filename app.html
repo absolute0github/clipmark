@@ -700,7 +700,7 @@ Only return the JSON array, no other text.`;
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${authToken}`
                 },
-                body: JSON.stringify({ prompt, maxTokens, temperature: 0.3, model: 'gemini-2.0-flash' })
+                body: JSON.stringify({ prompt, maxTokens, temperature: 0.3, model: 'gemini-2.5-flash' })
             });
 
             if (!response.ok) {
@@ -7870,7 +7870,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${authToken}`
                         },
-                        body: JSON.stringify({ prompt, maxTokens: 4096, temperature: 0.4, model: 'gemini-2.0-flash' })
+                        body: JSON.stringify({ prompt, maxTokens: 4096, temperature: 0.4, model: 'gemini-2.5-flash' })
                     });
 
                     if (!response.ok) {

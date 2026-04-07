@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **AI Report error displays `[object Object]`** — Gemini API error responses contain nested error objects; both the server proxy and client-side error handler now extract the string message properly instead of passing the raw object
   - `transcript-server.js`: Parse Gemini error JSON and return `{ error: string }` 
   - `app.html`: Handle non-string `errData.error` in report generation catch block
+- **AI Report and Note Enhancement fail with quota error** — `gemini-2.0-flash` has been deprecated from Google's free tier (quota set to 0). Updated all Gemini API calls to use `gemini-2.5-flash` consistently across both client and server
+  - `app.html`: Update model in note enhancement and report generation calls
+  - `transcript-server.js`: Update default model in `/api/gemini` proxy endpoint
 
 ## [Unreleased] - 2026-04-06
 

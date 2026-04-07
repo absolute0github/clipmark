@@ -4002,7 +4002,7 @@ const server = http.createServer(async (req, res) => {
 
         try {
             const body = await parseBody(req);
-            const { prompt, maxTokens = 2048, temperature = 0.3, model = 'gemini-2.0-flash' } = body || {};
+            const { prompt, maxTokens = 2048, temperature = 0.3, model = 'gemini-2.5-flash' } = body || {};
 
             if (!prompt) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
