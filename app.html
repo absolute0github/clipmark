@@ -7875,7 +7875,8 @@ Keep the Notes section exactly as provided above - do not modify the original no
 
                     if (!response.ok) {
                         const errData = await response.json().catch(() => ({}));
-                        throw new Error(errData.error || `API error: ${response.status}`);
+                        const errMsg = typeof errData.error === 'string' ? errData.error : errData.error?.message || `API error: ${response.status}`;
+                        throw new Error(errMsg);
                     }
 
                     const data = await response.json();

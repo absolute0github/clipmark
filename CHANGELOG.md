@@ -4,6 +4,13 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] - 2026-04-07
+
+### Fixed
+- **AI Report error displays `[object Object]`** — Gemini API error responses contain nested error objects; both the server proxy and client-side error handler now extract the string message properly instead of passing the raw object
+  - `transcript-server.js`: Parse Gemini error JSON and return `{ error: string }` 
+  - `app.html`: Handle non-string `errData.error` in report generation catch block
+
 ## [Unreleased] - 2026-04-06
 
 ### Added

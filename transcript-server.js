@@ -4026,8 +4026,14 @@ const server = http.createServer(async (req, res) => {
 
             if (geminiResponse.status !== 200) {
                 console.error('Gemini API error:', geminiResponse.data);
+                let errorMessage = `Gemini API error (${geminiResponse.status})`;
+                try {
+                    const errParsed = JSON.parse(geminiResponse.data);
+                    if (errParsed.error?.message) errorMessage = errParsed.error.message;
+                    else if (typeof errParsed.error === 'string') errorMessage = errParsed.error;
+                } catch (_) {}
                 res.writeHead(geminiResponse.status, { 'Content-Type': 'application/json' });
-                res.end(geminiResponse.data);
+                res.end(JSON.stringify({ error: errorMessage }));
                 return;
             }
 
