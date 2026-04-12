@@ -9387,7 +9387,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.28</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.29</p>
 
                                                 {/* Debug Panel */}
                                                 {showDebugPanel && (
@@ -9530,18 +9530,19 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                                     </span>
                                                                 </div>
                                                                 {filteredNotes.map(note => (
-                                                                <NoteItem
-                                                                    key={note.id}
-                                                                    note={note}
-                                                                    isNew={note.id === lastAddedNoteId}
-                                                                    onSeek={handleSeek}
-                                                                    onDelete={handleDeleteNote}
-                                                                    onEdit={handleEditNote}
-                                                                    onToggleFavorite={handleToggleFavorite}
-                                                                    searchTerm={noteSearch}
-                                                                    isSelected={selectedNoteIds.has(note.id)}
-                                                                    onToggleSelection={handleToggleNoteSelection}
-                                                                />
+                                                                    <NoteItem
+                                                                        key={note.id}
+                                                                        note={note}
+                                                                        isNew={note.id === lastAddedNoteId}
+                                                                        onSeek={handleSeek}
+                                                                        onDelete={handleDeleteNote}
+                                                                        onEdit={handleEditNote}
+                                                                        onToggleFavorite={handleToggleFavorite}
+                                                                        searchTerm={noteSearch}
+                                                                        isSelected={selectedNoteIds.has(note.id)}
+                                                                        onToggleSelection={handleToggleNoteSelection}
+                                                                    />
+                                                                ))}
                                                             </>
                                                         ) : (
                                                             <p className="text-center text-gray-500 py-8">
