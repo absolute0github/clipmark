@@ -47,7 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Files Modified
 - `app.html` — `fetchVideoMetadata`: channel name matched against categories before title-based suggestion; `handleAddVideo`: made async, auto-fetches YouTube API metadata after add; VideoCard/VideoListItem: removed "Get Details" button; header logo wrapped in `<button>` with onClick to navigate home
 
-## [3.4.23] - 2026-04-06
+## [3.4.24] - 2026-04-12
 
 ### Fixed
 - **Deleted videos returning after page refresh** — Two-part race condition: (1) `handleDeleteVideo` was fire-and-forgetting the `DELETE /bookmarks/:id` request while immediately calling `setVideos()`, causing the debounced save effect (500ms) to fire a POST that raced the DELETE and re-added the video via the server's merge logic. Fixed by making `handleDeleteVideo` `async` and awaiting the server DELETE before updating React state. (2) The POST `/bookmarks` merge on the server was unconditionally re-adding any video present on the server but absent from the incoming payload ("server-only videos"), which defeated a successful DELETE whenever a subsequent sync arrived. Fixed by dropping server-only videos (treating the client payload as authoritative — the client holds the post-delete truth).
@@ -56,7 +56,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `app.html` — `handleDeleteVideo` made `async`; server DELETE is now awaited before `setVideos()` so the debounced save cannot race the deletion
 - `transcript-server.js` — POST `/bookmarks` merge: server-only videos (not in incoming payload) are now dropped instead of unconditionally re-added
 
-## [3.4.23] - 2026-04-06
+## [3.4.24] - 2026-04-12
 
 ### Fixed
 - **"Get Context" no longer requires a second manual click for AI-generated transcripts** — On production (Hetzner), YouTube's timedtext and innertube APIs fail due to bot detection, so Gemini is always used as a background job. Previously this showed a "click again in 30-60 seconds" message. Now the button stays in loading state and automatically polls `/api/transcript/status` every 5 seconds until the transcript is ready, then applies it to the note field without any user action. Polling times out after 5 minutes.
@@ -160,6 +160,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Files Modified
 - `app.html` — `loadUserData()`: parallel fetch + batched state updates; save effect: `initialLoadCompleteRef` guard; `handleRefresh()`: parallel fetch + batched state updates
+
+## [3.3.1] - 2026-04-12
+
+### Fixed
+- **YouTube embed "Sign in to confirm you're not a bot" on iPad/Safari** — Added `host: 'https://www.youtube-nocookie.com'` and `origin: window.location.origin` to the YouTube IFrame player config. Safari's ITP (Intelligent Tracking Prevention) blocks cross-site YouTube cookies in embeds, causing the bot-check prompt. The `youtube-nocookie.com` domain is YouTube's privacy-enhanced embed host that does not require login cookies to play videos, resolving the issue on iPad and other Safari-based browsers.
+
+### Files Modified
+- `app.html` — `YouTubePlayer` component: added `host` and `origin` params to `YT.Player` constructor
+
+---
 
 ## [3.3.0] - 2026-03-06
 

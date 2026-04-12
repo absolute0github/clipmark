@@ -1020,6 +1020,7 @@ Only return the JSON array, no other text.`;
                             height: '100%',
                             width: '100%',
                             videoId: videoId,
+                            host: 'https://www.youtube-nocookie.com',
                             playerVars: {
                                 autoplay: 0,
                                 modestbranding: 1,
@@ -1027,7 +1028,8 @@ Only return the JSON array, no other text.`;
                                 enablejsapi: 1,
                                 fs: 1,
                                 cc_load_policy: 1,  // Enable captions by default
-                                cc_lang_pref: 'en'  // Prefer English captions
+                                cc_lang_pref: 'en',  // Prefer English captions
+                                origin: window.location.origin
                             },
                             events: {
                                 onReady: () => {
@@ -9310,7 +9312,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.23</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.24</p>
 
                                                 {/* Debug Panel */}
                                                 {showDebugPanel && (
