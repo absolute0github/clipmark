@@ -2029,7 +2029,7 @@ function parseTranscriptData(data) {
 // Gemini API method - uses Gemini to extract transcript from YouTube video
 // Completely bypasses YouTube scraping, works regardless of IP rate limits
 // Tries multiple models in order — older models get deprecated, billing caps vary
-const GEMINI_TRANSCRIPT_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+const GEMINI_TRANSCRIPT_MODELS = ['gemini-2.5-flash', 'gemini-1.5-flash'];
 
 async function getTranscriptViaGemini(videoId) {
     if (!GEMINI_API_KEY) return null;
