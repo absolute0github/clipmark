@@ -1947,7 +1947,7 @@ Only return the JSON array, no other text.`;
         };
 
         // Note Item Component
-        const NoteItem = ({ note, onSeek, onDelete, onEdit, onToggleFavorite, searchTerm, isNew }) => {
+        const NoteItem = ({ note, onSeek, onDelete, onEdit, onToggleFavorite, searchTerm, isNew, isSelected, onToggleSelection }) => {
             const [isEditing, setIsEditing] = useState(false);
             const [editText, setEditText] = useState(note.text);
             const [showOriginal, setShowOriginal] = useState(false);
@@ -2002,6 +2002,16 @@ Only return the JSON array, no other text.`;
                 <div className={`bg-gray-800 rounded-lg p-3 mb-2 hover:bg-gray-750 transition-colors ${isNew ? 'ring-2 ring-emerald-400' : searchTerm ? 'ring-1 ring-yellow-500/30' : ''}`}>
                     <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2">
+                            {onToggleSelection && (
+                                <input
+                                    type="checkbox"
+                                    checked={!!isSelected}
+                                    onChange={() => onToggleSelection(note.id)}
+                                    onClick={e => e.stopPropagation()}
+                                    className="w-4 h-4 rounded accent-purple-500 cursor-pointer shrink-0"
+                                    title="Include in enhancement"
+                                />
+                            )}
                             <button
                                 onClick={() => onSeek(note.timestamp)}
                                 className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 text-sm font-medium shrink-0"
@@ -6079,6 +6089,7 @@ Third subtitle text`}
             const [enhancementProgress, setEnhancementProgress] = useState({ current: 0, total: 0 });
             const [pendingEnhancements, setPendingEnhancements] = useState([]); // Notes needing user selection
             const [showEnhancementReview, setShowEnhancementReview] = useState(false);
+            const [selectedNoteIds, setSelectedNoteIds] = useState(new Set()); // Notes selected for enhancement
 
             // Transcript upload modal state
             const [showTranscriptModal, setShowTranscriptModal] = useState(false);
@@ -7223,6 +7234,8 @@ Third subtitle text`}
                 setShowSharedWithMe(false);
                 setNoteSearch('');
                 setTranscriptUnavailable(false);
+                const newVideo = videos.find(v => v.id === videoId);
+                setSelectedNoteIds(new Set((newVideo?.notes || []).map(n => n.id)));
                 setMobileMenuOpen(false);
                 setMobileActiveTab('player');
 
@@ -7246,6 +7259,19 @@ Third subtitle text`}
                         }
                     }).catch(() => {});
                 }
+            };
+
+            const handleToggleNoteSelection = (noteId) => {
+                setSelectedNoteIds(prev => {
+                    const next = new Set(prev);
+                    next.has(noteId) ? next.delete(noteId) : next.add(noteId);
+                    return next;
+                });
+            };
+
+            const handleToggleAllNotes = (notes) => {
+                const allSelected = notes.every(n => selectedNoteIds.has(n.id));
+                setSelectedNoteIds(new Set(allSelected ? [] : notes.map(n => n.id)));
             };
 
             const handleNavigateToNote = (videoId, timestamp) => {
@@ -7690,10 +7716,13 @@ Third subtitle text`}
                     const enhancedNotes = [];
                     const ambiguousNotes = [];
 
-                    // Build notes with transcript context
+                    // Build notes with transcript context (only selected notes)
+                    const notesToEnhance = selectedNoteIds.size > 0
+                        ? video.notes.filter(n => selectedNoteIds.has(n.id))
+                        : video.notes;
                     const notesWithContext = [];
                     const contextMap = new Map(); // noteId -> context string
-                    for (const note of video.notes) {
+                    for (const note of notesToEnhance) {
                         const context = getExtendedTranscriptContext(transcript, note.timestamp, 75, 75);
                         if (context) {
                             notesWithContext.push({ id: note.id, text: note.text, context });
@@ -8855,6 +8884,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                             setShowLibrary(false);
                                                             setNoteSearch('');
                                                             setTranscriptUnavailable(false);
+                                                            setSelectedNoteIds(new Set((shared?.notes || []).map(n => n.id)));
                                                         }}
                                                     >
                                                         <div className="relative group">
@@ -9066,9 +9096,9 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                     <div className={`flex items-center ${isMobile ? 'gap-2 flex-wrap' : 'gap-3'}`}>
                                                         <button
                                                             onClick={handleEnhanceAllNotes}
-                                                            disabled={isEnhancing || !displayVideo.notes || displayVideo.notes.length === 0 || !apiStatus.geminiConfigured}
+                                                            disabled={isEnhancing || !displayVideo.notes || displayVideo.notes.length === 0 || selectedNoteIds.size === 0 || !apiStatus.geminiConfigured}
                                                             className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
-                                                            title={!apiStatus.geminiConfigured ? "Gemini AI not configured on server" : "Enhance all notes with AI"}
+                                                            title={!apiStatus.geminiConfigured ? "Gemini AI not configured on server" : `Enhance ${selectedNoteIds.size} selected note${selectedNoteIds.size !== 1 ? 's' : ''} with AI`}
                                                         >
                                                             {isEnhancing ? (
                                                                 <>
@@ -9081,7 +9111,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                             ) : (
                                                                 <>
                                                                     <Icons.Sparkles />
-                                                                    Enhance Notes
+                                                                    Enhance Notes {displayVideo.notes?.length > 0 && `(${selectedNoteIds.size}/${displayVideo.notes.length})`}
                                                                 </>
                                                             )}
                                                         </button>
@@ -9357,7 +9387,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.27</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.28</p>
 
                                                 {/* Debug Panel */}
                                                 {showDebugPanel && (
@@ -9482,8 +9512,24 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                                 ...filteredNotes.filter(n => !n.favorite)
                                                             ];
                                                         }
+                                                        const allChecked = filteredNotes.length > 0 && filteredNotes.every(n => selectedNoteIds.has(n.id));
+                                                        const someChecked = filteredNotes.some(n => selectedNoteIds.has(n.id));
                                                         return filteredNotes.length > 0 ? (
-                                                            filteredNotes.map(note => (
+                                                            <>
+                                                                <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-700">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={allChecked}
+                                                                        ref={el => { if (el) el.indeterminate = someChecked && !allChecked; }}
+                                                                        onChange={() => handleToggleAllNotes(filteredNotes)}
+                                                                        className="w-4 h-4 rounded accent-purple-500 cursor-pointer"
+                                                                    />
+                                                                    <span className="text-xs text-gray-400">
+                                                                        {allChecked ? 'Uncheck all' : 'Check all'} for enhancement
+                                                                        <span className="ml-1 text-purple-400">({filteredNotes.filter(n => selectedNoteIds.has(n.id)).length}/{filteredNotes.length})</span>
+                                                                    </span>
+                                                                </div>
+                                                                {filteredNotes.map(note => (
                                                                 <NoteItem
                                                                     key={note.id}
                                                                     note={note}
@@ -9493,8 +9539,10 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                                     onEdit={handleEditNote}
                                                                     onToggleFavorite={handleToggleFavorite}
                                                                     searchTerm={noteSearch}
+                                                                    isSelected={selectedNoteIds.has(note.id)}
+                                                                    onToggleSelection={handleToggleNoteSelection}
                                                                 />
-                                                            ))
+                                                            </>
                                                         ) : (
                                                             <p className="text-center text-gray-500 py-8">
                                                                 No notes match "{noteSearch}"
