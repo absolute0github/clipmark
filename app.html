@@ -7271,7 +7271,15 @@ Third subtitle text`}
 
             const handleToggleAllNotes = (notes) => {
                 const allSelected = notes.every(n => selectedNoteIds.has(n.id));
-                setSelectedNoteIds(new Set(allSelected ? [] : notes.map(n => n.id)));
+                setSelectedNoteIds(prev => {
+                    const next = new Set(prev);
+                    if (allSelected) {
+                        notes.forEach(n => next.delete(n.id));
+                    } else {
+                        notes.forEach(n => next.add(n.id));
+                    }
+                    return next;
+                });
             };
 
             const handleNavigateToNote = (videoId, timestamp) => {
@@ -7435,6 +7443,7 @@ Third subtitle text`}
                     }
                     return video;
                 }));
+                setSelectedNoteIds(prev => new Set([...prev, newNoteObj.id]));
                 setNewNote('');
                 setLastAddedNoteId(newNoteObj.id);
                 setTimeout(() => setLastAddedNoteId(null), 1500);
@@ -7486,6 +7495,11 @@ Third subtitle text`}
                     }
                     return video;
                 }));
+                setSelectedNoteIds(prev => {
+                    const next = new Set(prev);
+                    next.delete(noteId);
+                    return next;
+                });
             };
 
             const handleEditNote = (noteId, newText) => {
@@ -7717,9 +7731,7 @@ Third subtitle text`}
                     const ambiguousNotes = [];
 
                     // Build notes with transcript context (only selected notes)
-                    const notesToEnhance = selectedNoteIds.size > 0
-                        ? video.notes.filter(n => selectedNoteIds.has(n.id))
-                        : video.notes;
+                    const notesToEnhance = video.notes.filter(n => selectedNoteIds.has(n.id));
                     const notesWithContext = [];
                     const contextMap = new Map(); // noteId -> context string
                     for (const note of notesToEnhance) {
@@ -7744,7 +7756,7 @@ Third subtitle text`}
                         // Map results by note ID
                         const resultMap = new Map(batchResults.map(r => [r.id, r]));
 
-                        for (const note of video.notes) {
+                        for (const note of notesToEnhance) {
                             const result = resultMap.get(note.id);
                             if (!result) {
                                 // No context or missing from batch response — keep original
@@ -7775,9 +7787,9 @@ Third subtitle text`}
                         }
                     } else {
                         // Fallback: per-note sequential processing
-                        for (let i = 0; i < video.notes.length; i++) {
-                            const note = video.notes[i];
-                            setEnhancementProgress({ current: i + 1, total: video.notes.length });
+                        for (let i = 0; i < notesToEnhance.length; i++) {
+                            const note = notesToEnhance[i];
+                            setEnhancementProgress({ current: i + 1, total: notesToEnhance.length });
 
                             try {
                                 const context = contextMap.get(note.id);
@@ -7835,20 +7847,24 @@ Third subtitle text`}
                         }
                     }
 
-                    // Update video with enhanced notes (non-ambiguous ones)
+                    // Merge enhanced notes back into full notes array (preserving unselected notes)
+                    const enhancedMap = new Map(enhancedNotes.map(n => [n.id, n]));
+                    const mergedNotes = video.notes.map(n => enhancedMap.get(n.id) || n);
+
+                    // Update video with merged notes
                     if (isShared) {
                         // Update shared video
-                        const updatedSharedVideo = { ...video, notes: enhancedNotes };
+                        const updatedSharedVideo = { ...video, notes: mergedNotes };
                         setSharedWithMe(prev => prev.map(shared =>
                             shared.shareId === video.shareId ? updatedSharedVideo : shared
                         ));
                         setActiveSharedVideo(updatedSharedVideo);
-                        saveSharedVideosToServer(video.shareId, enhancedNotes);
+                        saveSharedVideosToServer(video.shareId, mergedNotes);
                     } else {
                         // Update regular video
                         const updatedVideos = videos.map(v => {
                             if (v.id === activeVideoId) {
-                                return { ...v, notes: enhancedNotes };
+                                return { ...v, notes: mergedNotes };
                             }
                             return v;
                         });
@@ -9387,7 +9403,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.29</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.30</p>
 
                                                 {/* Debug Panel */}
                                                 {showDebugPanel && (
