@@ -2088,6 +2088,13 @@ async function getTranscriptViaGemini(videoId) {
                 throw new Error(`Gemini billing/rate limit: ${errMsg}`);
             }
 
+            if (response.status === 403) {
+                // 403 from Gemini on YouTube videos usually means the video is unlisted,
+                // private, or otherwise inaccessible to the Gemini API. Not a key issue.
+                console.log(`⚠️ Gemini ${model}: video ${videoId} is not accessible (unlisted/private). Skipping AI transcript.`);
+                throw new Error('This video is not publicly accessible — Gemini cannot fetch its transcript. Please upload a subtitle file (SRT/VTT) manually.');
+            }
+
             if (response.status !== 200) {
                 let errDetail = response.data?.substring(0, 300) || '';
                 try {
