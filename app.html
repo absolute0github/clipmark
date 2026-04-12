@@ -864,6 +864,7 @@ Only return the JSON object, no other text.`;
                             height: '100%',
                             width: '100%',
                             videoId: videoId,
+                            host: 'https://www.youtube-nocookie.com',
                             playerVars: {
                                 autoplay: 0,
                                 modestbranding: 1,
@@ -871,7 +872,8 @@ Only return the JSON object, no other text.`;
                                 enablejsapi: 1,
                                 fs: 1,
                                 cc_load_policy: 1,  // Enable captions by default
-                                cc_lang_pref: 'en'  // Prefer English captions
+                                cc_lang_pref: 'en',  // Prefer English captions
+                                origin: window.location.origin
                             },
                             events: {
                                 onReady: () => {

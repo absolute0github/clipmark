@@ -4,6 +4,16 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.3.1] - 2026-04-12
+
+### Fixed
+- **YouTube embed "Sign in to confirm you're not a bot" on iPad/Safari** — Added `host: 'https://www.youtube-nocookie.com'` and `origin: window.location.origin` to the YouTube IFrame player config. Safari's ITP (Intelligent Tracking Prevention) blocks cross-site YouTube cookies in embeds, causing the bot-check prompt. The `youtube-nocookie.com` domain is YouTube's privacy-enhanced embed host that does not require login cookies to play videos, resolving the issue on iPad and other Safari-based browsers.
+
+### Files Modified
+- `app.html` — `YouTubePlayer` component: added `host` and `origin` params to `YT.Player` constructor
+
+---
+
 ## [3.3.0] - 2026-03-06
 
 ### Added
