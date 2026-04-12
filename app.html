@@ -7235,7 +7235,7 @@ Third subtitle text`}
                 setNoteSearch('');
                 setTranscriptUnavailable(false);
                 const newVideo = videos.find(v => v.id === videoId);
-                setSelectedNoteIds(new Set((newVideo?.notes || []).map(n => n.id)));
+                setSelectedNoteIds(new Set((newVideo?.notes || []).filter(n => !n.enhanced).map(n => n.id)));
                 setMobileMenuOpen(false);
                 setMobileActiveTab('player');
 
@@ -8903,7 +8903,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                             setShowLibrary(false);
                                                             setNoteSearch('');
                                                             setTranscriptUnavailable(false);
-                                                            setSelectedNoteIds(new Set((shared?.notes || []).map(n => n.id)));
+                                                            setSelectedNoteIds(new Set((shared?.notes || []).filter(n => !n.enhanced).map(n => n.id)));
                                                         }}
                                                     >
                                                         <div className="relative group">
@@ -9406,7 +9406,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.34</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.35</p>
 
                                                 {/* Debug Panel */}
                                                 {showDebugPanel && (
