@@ -937,6 +937,9 @@ Only return the JSON array, no other text.`;
             const [playerId] = useState(() => `yt-player-${generateId()}`);
             const [isReady, setIsReady] = useState(false);
             const [playerError, setPlayerError] = useState(null);
+            // Detect iOS (iPhone/iPad/iPod, or iPad in desktop mode via maxTouchPoints)
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
             useEffect(() => {
                 if (!videoId) return;
@@ -1035,7 +1038,13 @@ Only return the JSON array, no other text.`;
                             rel: '0',
                             fs: '1',
                             cc_load_policy: '1',
-                            cc_lang_pref: 'en'
+                            cc_lang_pref: 'en',
+                            // playsinline=1 is critical on iOS — without it Safari intercepts
+                            // the tap and plays in native fullscreen, which breaks the IFrame API
+                            // postMessage bridge and can trigger YouTube's bot-check prompt.
+                            playsinline: '1',
+                            // widget_referrer helps YouTube recognize the embed origin as legitimate
+                            widget_referrer: window.location.origin,
                         });
                         const iframe = document.createElement('iframe');
                         iframe.id = iframeId;
@@ -1154,8 +1163,27 @@ Only return the JSON array, no other text.`;
             // Without this wrapper, React's removeChild(div#playerId) fails because
             // YouTube already replaced that div with an iframe → "not a child" crash.
             return (
-                <div className="w-full h-full rounded-lg overflow-hidden">
+                <div className="w-full h-full rounded-lg overflow-hidden relative">
                     <div id={playerId} className="w-full h-full" />
+                    {isIOS && isReady && (
+                        <a
+                            href={`https://www.youtube.com/watch?v=${videoId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="If you see a sign-in prompt, tap here to open in the YouTube app"
+                            style={{
+                                position: 'absolute', top: '8px', right: '8px', zIndex: 10,
+                                background: 'rgba(0,0,0,0.72)', color: '#fff',
+                                fontSize: '11px', padding: '4px 10px', borderRadius: '20px',
+                                textDecoration: 'none', backdropFilter: 'blur(4px)',
+                                WebkitBackdropFilter: 'blur(4px)',
+                                display: 'flex', alignItems: 'center', gap: '4px',
+                                lineHeight: '1.4',
+                            }}
+                        >
+                            ▶ Open in YouTube
+                        </a>
+                    )}
                 </div>
             );
         };
@@ -9329,7 +9357,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.25</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.26</p>
 
                                                 {/* Debug Panel */}
                                                 {showDebugPanel && (
