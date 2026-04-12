@@ -1016,21 +1016,38 @@ Only return the JSON array, no other text.`;
                     cleanupPlayer();
 
                     try {
-                        playerRef.current = new window.YT.Player(playerId, {
-                            height: '100%',
-                            width: '100%',
-                            videoId: videoId,
-                            host: 'https://www.youtube-nocookie.com',
-                            playerVars: {
-                                autoplay: 0,
-                                modestbranding: 1,
-                                rel: 0,
-                                enablejsapi: 1,
-                                fs: 1,
-                                cc_load_policy: 1,  // Enable captions by default
-                                cc_lang_pref: 'en',  // Prefer English captions
-                                origin: window.location.origin
-                            },
+                        // Pre-create the iframe with the youtube-nocookie.com URL directly.
+                        // This is more reliable than relying on the undocumented YT.Player
+                        // `host` param, which Safari/iPad can ignore. When the YT IFrame API
+                        // receives an element ID that already points to a nocookie iframe with
+                        // enablejsapi=1, it communicates via postMessage without replacing the
+                        // iframe src — guaranteeing the nocookie domain is always used.
+                        const container = document.getElementById(playerId);
+                        if (!container) return;
+                        const existingIframe = container.querySelector('iframe');
+                        if (existingIframe) existingIframe.remove();
+
+                        const iframeId = `${playerId}-frame`;
+                        const nocookieParams = new URLSearchParams({
+                            enablejsapi: '1',
+                            origin: window.location.origin,
+                            modestbranding: '1',
+                            rel: '0',
+                            fs: '1',
+                            cc_load_policy: '1',
+                            cc_lang_pref: 'en'
+                        });
+                        const iframe = document.createElement('iframe');
+                        iframe.id = iframeId;
+                        iframe.src = `https://www.youtube-nocookie.com/embed/${videoId}?${nocookieParams.toString()}`;
+                        iframe.style.width = '100%';
+                        iframe.style.height = '100%';
+                        iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen');
+                        iframe.setAttribute('allowfullscreen', 'true');
+                        iframe.setAttribute('frameborder', '0');
+                        container.appendChild(iframe);
+
+                        playerRef.current = new window.YT.Player(iframeId, {
                             events: {
                                 onReady: () => {
                                     if (isMounted) {
@@ -9312,7 +9329,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.24</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.25</p>
 
                                                 {/* Debug Panel */}
                                                 {showDebugPanel && (
