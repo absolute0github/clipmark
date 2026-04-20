@@ -6243,6 +6243,7 @@ Third subtitle text`}
 
             const loadUserData = async (token) => {
                 initialLoadCompleteRef.current = false;
+                backfilledMetadataRef.current = false;
                 try {
                     // Fetch categories and bookmarks in parallel, set state together
                     // to prevent the save effect from syncing an empty videos array
@@ -6791,6 +6792,53 @@ Third subtitle text`}
                 document.addEventListener('visibilitychange', onVisibility);
                 return () => document.removeEventListener('visibilitychange', onVisibility);
             }, [authToken, SERVER_URL]);
+
+            // One-shot backfill of missing publishDate/description/thumbnail for YouTube videos.
+            // Runs once per session after initial load, catches up videos added while the server
+            // YouTube API path was broken (pre-IPv4 fix).
+            const backfilledMetadataRef = useRef(false);
+            useEffect(() => {
+                if (backfilledMetadataRef.current) return;
+                if (!authToken || !apiStatus.youtubeConfigured) return;
+                if (!initialLoadCompleteRef.current) return;
+                if (videos.length === 0) return;
+
+                const missing = videos.filter(v => {
+                    const ytId = v.sourceType === 'youtube' ? v.sourceId : (v.videoId || null);
+                    return ytId && (!v.publishDate || !v.description);
+                });
+                if (missing.length === 0) return;
+
+                backfilledMetadataRef.current = true;
+                console.log(`🔄 Backfilling YouTube metadata for ${missing.length} video(s)...`);
+
+                (async () => {
+                    let filled = 0;
+                    for (const v of missing) {
+                        const ytId = v.sourceType === 'youtube' ? v.sourceId : v.videoId;
+                        try {
+                            const resp = await fetch(`${SERVER_URL}/api/youtube/video?id=${ytId}`, {
+                                headers: { 'Authorization': `Bearer ${authToken}` }
+                            });
+                            const data = await resp.json();
+                            if (!data.error) {
+                                const updates = {};
+                                if (data.publishedAt && !v.publishDate) updates.publishDate = data.publishedAt.split('T')[0];
+                                if (data.description && !v.description) updates.description = data.description;
+                                if (!v.thumbnail && (data.thumbnails?.maxres?.url || data.thumbnails?.high?.url)) {
+                                    updates.thumbnail = data.thumbnails.maxres?.url || data.thumbnails.high.url;
+                                }
+                                if (Object.keys(updates).length > 0) {
+                                    setVideos(prev => prev.map(x => x.id === v.id ? { ...x, ...updates } : x));
+                                    filled++;
+                                }
+                            }
+                        } catch (e) { /* ignore individual failures */ }
+                        await new Promise(r => setTimeout(r, 250));
+                    }
+                    console.log(`✅ Metadata backfill complete: ${filled}/${missing.length} updated`);
+                })();
+            }, [videos.length, authToken, apiStatus.youtubeConfigured]);
 
             // Save API key handlers
             const handleSaveGeminiApiKey = (key) => {
@@ -9408,7 +9456,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.49</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.50</p>
 
                                                 {/* Debug Panel */}
                                                 {showDebugPanel && (
