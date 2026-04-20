@@ -35,5 +35,9 @@ npm-debug.log*
 .env.local
 .env.production
 
+# Security incident notes (contain revoked keys, infrastructure details — keep local only)
+SECURITY-INCIDENT-*.md
+SECURITY-INCIDENT-RESPONSE.md
+
 # yt-dlp binary (will be installed on Railway)
 yt-dlp

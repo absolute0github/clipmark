@@ -2089,9 +2089,65 @@ async function getTranscriptViaGemini(videoId) {
             }
 
             if (response.status === 403) {
-                // 403 from Gemini on YouTube videos usually means the video is unlisted,
-                // private, or otherwise inaccessible to the Gemini API. Not a key issue.
-                console.log(`⚠️ Gemini ${model}: video ${videoId} is not accessible (unlisted/private). Skipping AI transcript.`);
+                // 403 has several distinct causes — parse the body to distinguish them.
+                // Key-level failures are terminal (trying another model with the same bad
+                // key won't help), so we tag them so the outer catch can re-throw.
+                let errMsg = '';
+                let errStatus = '';
+                let errReason = '';
+                try {
+                    const errData = JSON.parse(response.data);
+                    errMsg = errData?.error?.message || '';
+                    errStatus = errData?.error?.status || '';
+                    const details = errData?.error?.details || [];
+                    for (const d of details) {
+                        if (d?.reason) { errReason = d.reason; break; }
+                        if (Array.isArray(d?.errors)) {
+                            for (const e of d.errors) {
+                                if (e?.reason) { errReason = e.reason; break; }
+                            }
+                            if (errReason) break;
+                        }
+                    }
+                } catch (_) {}
+                const combined = `${errMsg} ${errReason}`.toLowerCase();
+                console.log(`⚠️ Gemini ${model} 403: status=${errStatus} reason=${errReason} msg=${errMsg.substring(0, 200)}`);
+
+                if (
+                    combined.includes('reported as leaked') ||
+                    combined.includes('api key not valid') ||
+                    combined.includes('api key has been suspended') ||
+                    errReason === 'API_KEY_INVALID' ||
+                    errReason === 'API_KEY_SUSPENDED'
+                ) {
+                    const err = new Error(`Gemini API key invalid/revoked: ${errMsg}`);
+                    err.keyFailure = true;
+                    throw err;
+                }
+                if (
+                    combined.includes('api_key_ip_address_blocked') ||
+                    errReason === 'API_KEY_IP_ADDRESS_BLOCKED'
+                ) {
+                    const err = new Error(`Gemini API key IP restriction blocked this request: ${errMsg}`);
+                    err.keyFailure = true;
+                    throw err;
+                }
+                if (
+                    combined.includes('api_key_http_referrer_blocked') ||
+                    errReason === 'API_KEY_HTTP_REFERRER_BLOCKED'
+                ) {
+                    const err = new Error(`Gemini API key HTTP referrer restriction blocked this request: ${errMsg}`);
+                    err.keyFailure = true;
+                    throw err;
+                }
+                if (errReason === 'API_KEY_SERVICE_BLOCKED' || combined.includes('service account')) {
+                    const err = new Error(`Gemini API key misconfiguration (service-account binding): ${errMsg}`);
+                    err.keyFailure = true;
+                    throw err;
+                }
+
+                // Fallback: likely the video itself is inaccessible to Gemini.
+                console.log(`⚠️ Gemini ${model}: video ${videoId} appears inaccessible (unlisted/private). Skipping AI transcript.`);
                 throw new Error('This video is not publicly accessible — Gemini cannot fetch its transcript. Please upload a subtitle file (SRT/VTT) manually.');
             }
 
@@ -2146,8 +2202,8 @@ async function getTranscriptViaGemini(videoId) {
 
             lastError = new Error(`Gemini ${model} returned unparseable response`);
         } catch (e) {
-            // 429 billing/rate limit errors are terminal — don't try other models
-            if (e.message.includes('billing') || e.message.includes('spending cap')) {
+            // Terminal failures — no point trying another model with the same bad key/billing state
+            if (e.keyFailure || e.message.includes('billing') || e.message.includes('spending cap')) {
                 throw e;
             }
             lastError = e;
@@ -2297,10 +2353,17 @@ async function getTranscript(videoId) {
             })
             .catch(e => {
                 console.log(`❌ Background Gemini job failed for ${videoId}: ${e.message}`);
+                // Key-level failures won't self-heal — mark as max attempts so we don't
+                // burn retries, and sanitize the user-facing message so it doesn't leak
+                // internal key/IP/referrer details.
+                const isKeyFailure = !!e.keyFailure;
+                const userMsg = isKeyFailure
+                    ? 'AI transcription is temporarily unavailable (server configuration issue).'
+                    : e.message.substring(0, 100);
                 failedGeminiJobs.set(videoId, {
                     timestamp: Date.now(),
-                    attempts: attemptNum,
-                    lastError: e.message.substring(0, 100)
+                    attempts: isKeyFailure ? MAX_GEMINI_RETRIES : attemptNum,
+                    lastError: userMsg
                 });
             })
             .finally(() => {

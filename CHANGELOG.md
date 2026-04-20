@@ -47,7 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Files Modified
 - `app.html` — `fetchVideoMetadata`: channel name matched against categories before title-based suggestion; `handleAddVideo`: made async, auto-fetches YouTube API metadata after add; VideoCard/VideoListItem: removed "Get Details" button; header logo wrapped in `<button>` with onClick to navigate home
 
-## [3.4.35] - 2026-04-12
+## [3.4.47] - 2026-04-20
 
 ### Fixed
 - **Deleted videos returning after page refresh** — Two-part race condition: (1) `handleDeleteVideo` was fire-and-forgetting the `DELETE /bookmarks/:id` request while immediately calling `setVideos()`, causing the debounced save effect (500ms) to fire a POST that raced the DELETE and re-added the video via the server's merge logic. Fixed by making `handleDeleteVideo` `async` and awaiting the server DELETE before updating React state. (2) The POST `/bookmarks` merge on the server was unconditionally re-adding any video present on the server but absent from the incoming payload ("server-only videos"), which defeated a successful DELETE whenever a subsequent sync arrived. Fixed by dropping server-only videos (treating the client payload as authoritative — the client holds the post-delete truth).
@@ -56,16 +56,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `app.html` — `handleDeleteVideo` made `async`; server DELETE is now awaited before `setVideos()` so the debounced save cannot race the deletion
 - `transcript-server.js` — POST `/bookmarks` merge: server-only videos (not in incoming payload) are now dropped instead of unconditionally re-added
 
-## [3.4.35] - 2026-04-12
+## [3.4.47] - 2026-04-20
 
 ### Fixed
 - **"Get Context" no longer requires a second manual click for AI-generated transcripts** — On production (Hetzner), YouTube's timedtext and innertube APIs fail due to bot detection, so Gemini is always used as a background job. Previously this showed a "click again in 30-60 seconds" message. Now the button stays in loading state and automatically polls `/api/transcript/status` every 5 seconds until the transcript is ready, then applies it to the note field without any user action. Polling times out after 5 minutes.
 - **Gemini "contents is not specified" 400 error** — `fetchUrl()` was not setting `Content-Length` header on POST requests, causing Node.js to use chunked transfer-encoding which the Gemini API cannot parse. Now sets `Content-Length: Buffer.byteLength(body)` for all requests with a body.
 - **Gemini model fallback chain** — If `gemini-2.5-flash` returns 404 (deprecated) or fails, automatically tries `gemini-2.0-flash`. Billing/rate-limit errors (429) surface the actual Gemini error message instead of generic "HTTP 429".
+- **Gemini 403 misclassified as "video not publicly accessible"** — `getTranscriptViaGemini()` previously treated every 403 as a video-privacy issue, masking key-level failures (revoked/leaked keys, IP restrictions, HTTP referrer restrictions, service-account-bound misconfig). Now parses `error.message`, `error.status`, and `error.details[].reason` to distinguish causes. Key-level failures are tagged `keyFailure`, made terminal in the model-fallback loop, pinned to max-retries in the failed-jobs cache (no wasted retries during cooldown), and surfaced to end users as a generic "AI transcription is temporarily unavailable" — full detail stays in server logs. The original "video not publicly accessible" message is preserved as the fallback when no key signal matches.
 
 ### Files Modified
 - `app.html` — Replaced manual "click again" UX in `handleLoadContext` with automatic polling loop (`pollUntilReady`); captures timestamp at click time so context is applied at the correct video position when polling completes
-- `transcript-server.js` — Added `Content-Length` header in `fetchUrl()` for POST bodies; refactored `getTranscriptViaGemini()` to try multiple models with proper error classification (404 = try next model, 429 = surface billing error, other = continue)
+- `transcript-server.js` — Added `Content-Length` header in `fetchUrl()` for POST bodies; refactored `getTranscriptViaGemini()` to try multiple models with proper error classification (404 = try next model, 429 = surface billing error, other = continue); rewrote 403 handler to parse Gemini error body for `API_KEY_INVALID`/`API_KEY_SUSPENDED`/`API_KEY_IP_ADDRESS_BLOCKED`/`API_KEY_HTTP_REFERRER_BLOCKED`/`API_KEY_SERVICE_BLOCKED` reason codes; updated background-job catch to sanitize user-facing message for key failures
 
 ## [3.4.8] - 2026-04-04
 
