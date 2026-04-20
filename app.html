@@ -5632,7 +5632,7 @@ Third subtitle text`}
                                 {debugMetaFetch ? 'Debug: ON' : 'Debug: OFF'}
                             </button>
                             <span className="text-xs text-gray-500">{username}</span>
-                            <a href="/" className="text-xs text-gray-400 hover:text-emerald-400 transition-colors">App</a>
+                            <a href="/app" className="text-xs text-gray-400 hover:text-emerald-400 transition-colors">App</a>
                             <button onClick={onLogout} className="text-xs text-gray-500 hover:text-red-400 transition-colors">Logout</button>
                         </div>
                     </header>
@@ -8482,8 +8482,10 @@ Keep the Notes section exactly as provided above - do not modify the original no
                             {isAdmin && (
                                 <a
                                     href="/admin"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
                                     className="p-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg transition-colors"
-                                    title="Admin Dashboard"
+                                    title="Admin Dashboard (opens in new tab)"
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -9406,7 +9408,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.48</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.49</p>
 
                                                 {/* Debug Panel */}
                                                 {showDebugPanel && (
