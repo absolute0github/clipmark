@@ -4023,6 +4023,12 @@ const server = http.createServer(async (req, res) => {
             recordQuickAddAttempt(userId);
 
             console.log(`📌 Quick-add: ${sourceType} video "${video.title}" added by user ${userId}`);
+
+            // Pre-warm the transcript cache so the first-sentence seed is instant on open.
+            if (sourceType === 'youtube' && sourceId) {
+                getTranscript(sourceId).catch(() => {});
+            }
+
             res.writeHead(201, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,

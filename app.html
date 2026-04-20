@@ -6058,6 +6058,7 @@ Third subtitle text`}
             const [isRefreshing, setIsRefreshing] = useState(false);
             const playerRef = useRef(null);
             const fileInputRef = useRef(null);
+            const selectTokenRef = useRef(0);
 
             // Mobile/Tablet responsive state
             const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
@@ -7201,6 +7202,12 @@ Third subtitle text`}
                 // Auto-fetch richer YouTube metadata (description, publish date, high-res thumbnail)
                 // silently in the background after the video is added
                 const youtubeId = video.sourceType === 'youtube' ? video.sourceId : (video.videoId || null);
+
+                // Pre-warm the server transcript cache so the first-sentence seed is instant on open.
+                if (youtubeId) {
+                    fetchTranscript(youtubeId).catch(() => {});
+                }
+
                 if (youtubeId && apiStatus.youtubeConfigured) {
                     try {
                         const response = await fetch(
@@ -7290,6 +7297,29 @@ Third subtitle text`}
                 // Backfill missing description/metadata for older YouTube videos
                 const video = videos.find(v => v.id === videoId);
                 const youtubeId = video?.sourceType === 'youtube' ? video.sourceId : (video?.videoId || null);
+
+                // Seed the note input with the first sentence of the transcript on open.
+                // Uses stored uploaded transcript when present; otherwise fetches from the server
+                // (cache should be warm if the video was prefetched on add).
+                const selectToken = ++selectTokenRef.current;
+                const seedFirstSentence = (transcript) => {
+                    if (!transcript || !transcript.length) return;
+                    if (selectTokenRef.current !== selectToken) return;
+                    const firstContext = getTranscriptContext(transcript, 0, 0, contextWordCount);
+                    if (!firstContext) return;
+                    setNewNote(prev => prev === '' ? firstContext : prev);
+                };
+                if (video?.transcript?.segments?.length) {
+                    seedFirstSentence(video.transcript.segments);
+                } else if (youtubeId) {
+                    fetchTranscript(youtubeId).then(transcript => {
+                        if (transcript && transcript.length) {
+                            setCachedTranscript({ videoId: youtubeId, data: transcript });
+                            seedFirstSentence(transcript);
+                        }
+                    }).catch(() => {});
+                }
+
                 if (youtubeId && !video?.description && apiStatus.youtubeConfigured) {
                     fetch(`${SERVER_URL}/api/youtube/video?id=${youtubeId}`, {
                         headers: { 'Authorization': `Bearer ${authToken}` }
@@ -9138,6 +9168,8 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                 <button onClick={() => setShowAddModal(true)} className="mt-4 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">Add Video</button>
                                             </div>
                                         )}
+                                        <p className="text-xs text-gray-600 mt-6 text-center">© 2026 Absolute 0 Internet Studios</p>
+                                        <p className="text-xs text-gray-600 text-center">v3.4.51</p>
                                     </div>
                                 )
                             ) : (
@@ -9456,7 +9488,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
                                                 {/* Description moved to notes panel */}
                                                 {/* Footer - outside note container */}
                                                 <p className="text-xs text-gray-600 mt-2 text-center">© 2026 Absolute 0 Internet Studios</p>
-                                                <p className="text-xs text-gray-600 text-center">v3.4.50</p>
+                                                <p className="text-xs text-gray-600 text-center">v3.4.51</p>
 
                                                 {/* Debug Panel */}
                                                 {showDebugPanel && (

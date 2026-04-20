@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-04-20
 
+### Added
+- **Pre-fetch transcript + seed note input with first sentence (v3.4.51)** — When a YouTube video is added (modal, quick-add API, or Chrome extension), the transcript is fetched in the background so the server cache is warm. When the user opens the video, the note input textarea auto-populates with the first-sentence context from the transcript (only when the textarea is empty). Seeding skips if a stored SRT/VTT transcript is already present (which is used immediately instead). A select-token ref guards against race conditions when the user switches videos before the fetch resolves.
+  - `app.html`: `handleAddVideo` fires `fetchTranscript` in background for YouTube videos; `handleSelectVideo` seeds `newNote` via `getTranscriptContext(transcript, 0, 0, contextWordCount)` using a `selectTokenRef` to cancel stale async responses; new `useRef` added for the token
+  - `transcript-server.js`: `/api/clips/quick-add` now fires `getTranscript(sourceId)` in the background on successful YouTube save so the cache is warm by the time the user clicks into the video
+
 ### Fixed
 - **YouTube metadata (publishDate, description, thumbnail) missing on new videos** — The production YouTube Data API key has an IP allowlist restriction in Google Cloud Console. Hetzner's outbound IPv6 (`2a01:4f9:c012:62dc::1`) is not allowlisted, and Node's `fetchUrl` was defaulting to IPv6, so every server-side YouTube API call returned `403 API_KEY_IP_ADDRESS_BLOCKED`. Server-side flows (Chrome extension quick-add, `/api/youtube/video` backfill) therefore saved videos without a publishDate. Both `fetchUrl` call sites for `googleapis.com/youtube/v3` now pass `forceIPv4: true` so requests go over the allowlisted IPv4.
   - `transcript-server.js`: `fetchVideoMetadata` and the `/api/youtube/video` proxy both force IPv4
