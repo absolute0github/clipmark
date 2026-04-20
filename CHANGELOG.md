@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-04-20
 
+### Fixed
+- **Deleted videos and notes reappear across devices / after login** — `POST /bookmarks` uses a union merge that preserves videos (and notes within videos) missing from the incoming client payload, to protect Chrome-extension additions. The same protection was also re-adding deleted videos and notes whenever a second session (another tab, phone, or laptop) POSTed its stale pre-delete snapshot — and a single-device race where a debounced POST in flight at delete time could resurrect the item. Introduced per-user tombstones (`data/users/<userId>/tombstones.json`, shape `{ videos: {[id]: ISO}, notes: {[id]: ISO} }`):
+  - `DELETE /bookmarks/:id` records a video tombstone (idempotent — also tombstones if the video is already absent, covering in-flight-POST races)
+  - New `DELETE /bookmarks/:videoId/notes/:noteId` endpoint records a note tombstone and removes the note from storage
+  - `POST /bookmarks` merge filters out any incoming or existing video whose ID is tombstoned, and strips tombstoned note IDs inside each surviving video
+  - Tombstones auto-prune after 30 days
+  - Backup restore clears tombstones on `replace`, and un-tombstones revived video + note IDs on `merge`, so imports always survive the next client sync
+  - Client (`app.html`): `handleDeleteNote` now awaits the note DELETE before mutating local state (same pattern as `handleDeleteVideo`)
+  - `transcript-server.js`: new helpers `readUserTombstones`, `writeUserTombstones`, `pruneTombstoneMap`, `addVideoTombstone`, `addNoteTombstone`; note-delete route placed ahead of the video-delete route since both match `/bookmarks/*`
+
 ### Added
 - **Pre-fetch transcript + seed note input with first sentence (v3.4.51)** — When a YouTube video is added (modal, quick-add API, or Chrome extension), the transcript is fetched in the background so the server cache is warm. When the user opens the video, the note input textarea auto-populates with the first-sentence context from the transcript (only when the textarea is empty). Seeding skips if a stored SRT/VTT transcript is already present (which is used immediately instead). A select-token ref guards against race conditions when the user switches videos before the fetch resolves.
   - `app.html`: `handleAddVideo` fires `fetchTranscript` in background for YouTube videos; `handleSelectVideo` seeds `newNote` via `getTranscriptContext(transcript, 0, 0, contextWordCount)` using a `selectTokenRef` to cancel stale async responses; new `useRef` added for the token

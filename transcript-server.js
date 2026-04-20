@@ -1327,6 +1327,66 @@ function writeUserCategories(userId, categories) {
     }
 }
 
+// Tombstones: per-user record of deleted video IDs so that stale clients
+// (other tabs/devices holding pre-delete state in memory) cannot re-add a
+// deleted video through the POST /bookmarks union merge. Entries older than
+// TOMBSTONE_TTL_MS are pruned on read — 30 days is long enough for any other
+// session to re-sync.
+const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+function pruneTombstoneMap(map) {
+    const cutoff = Date.now() - TOMBSTONE_TTL_MS;
+    const out = {};
+    for (const [id, ts] of Object.entries(map || {})) {
+        const when = Date.parse(ts);
+        if (Number.isFinite(when) && when >= cutoff) out[id] = ts;
+    }
+    return out;
+}
+
+function readUserTombstones(userId) {
+    try {
+        const filePath = path.join(getUserDataDir(userId), 'tombstones.json');
+        if (!fs.existsSync(filePath)) return { videos: {}, notes: {} };
+        const raw = JSON.parse(fs.readFileSync(filePath, 'utf8')) || {};
+        return {
+            videos: pruneTombstoneMap(raw.videos),
+            notes: pruneTombstoneMap(raw.notes)
+        };
+    } catch (e) {
+        console.error(`Error reading tombstones for user ${userId}:`, e.message);
+        return { videos: {}, notes: {} };
+    }
+}
+
+function writeUserTombstones(userId, tombstones) {
+    try {
+        ensureUserDataDir(userId);
+        const filePath = path.join(getUserDataDir(userId), 'tombstones.json');
+        const payload = {
+            videos: tombstones.videos || {},
+            notes: tombstones.notes || {}
+        };
+        fs.writeFileSync(filePath, JSON.stringify(payload, null, 2));
+        return true;
+    } catch (e) {
+        console.error(`Error writing tombstones for user ${userId}:`, e.message);
+        return false;
+    }
+}
+
+function addVideoTombstone(userId, videoId) {
+    const tombstones = readUserTombstones(userId);
+    tombstones.videos[videoId] = new Date().toISOString();
+    return writeUserTombstones(userId, tombstones);
+}
+
+function addNoteTombstone(userId, noteId) {
+    const tombstones = readUserTombstones(userId);
+    tombstones.notes[noteId] = new Date().toISOString();
+    return writeUserTombstones(userId, tombstones);
+}
+
 // Check if this is the first user (for migration)
 function isFirstUser() {
     const users = readUsers();
@@ -4416,24 +4476,39 @@ Format your response as JSON with a "message" field explaining this, and include
                 const incoming = await parseBody(req);
                 if (Array.isArray(incoming)) {
                     const existing = readUserBookmarks(userId);
+                    const tombstones = readUserTombstones(userId);
+                    const deletedIds = tombstones.videos;
                     console.log(`📚 POST /bookmarks - merging ${incoming.length} incoming with ${existing.length} existing for user ${userId}`);
 
-                    // MERGE STRATEGY: never lose data
-                    // 1. Build a map of existing videos by ID
+                    // MERGE STRATEGY: never lose data, but honor tombstones so a stale
+                    // client POSTing a pre-delete snapshot cannot resurrect a deleted video.
+                    // 1. Build a map of existing videos by ID (excluding tombstoned IDs,
+                    //    defensive — they shouldn't be here, but purge if they are)
                     const existingMap = new Map();
                     for (const video of existing) {
-                        if (video.id) existingMap.set(video.id, video);
+                        if (video.id && !deletedIds[video.id]) existingMap.set(video.id, video);
                     }
 
-                    // 2. Build a map of incoming videos by ID
+                    // 2. Build a map of incoming videos by ID (excluding tombstoned IDs —
+                    //    this is the load-bearing filter that fixes cross-device delete)
                     const incomingMap = new Map();
+                    let droppedByTombstone = 0;
                     for (const video of incoming) {
-                        if (video.id) incomingMap.set(video.id, video);
+                        if (!video.id) continue;
+                        if (deletedIds[video.id]) { droppedByTombstone++; continue; }
+                        incomingMap.set(video.id, video);
+                    }
+                    if (droppedByTombstone > 0) {
+                        console.log(`🪦 Dropped ${droppedByTombstone} incoming video(s) via tombstone for user ${userId}`);
                     }
 
                     // 3. Merge: for each video, keep the version with more notes.
                     //    For notes within a video, union by note ID, keeping the
                     //    version with the longest text (captures enhancements).
+                    //    Tombstoned note IDs are always dropped (same cross-session
+                    //    resurrection problem as videos).
+                    const deletedNoteIds = tombstones.notes;
+                    let droppedNoteTombstones = 0;
                     const merged = [];
                     const allIds = new Set([...existingMap.keys(), ...incomingMap.keys()]);
 
@@ -4445,23 +4520,34 @@ Format your response as JSON with a "message" field explaining this, and include
                             // Video only on server — keep it. Deletes happen via DELETE /bookmarks/:id.
                             // Never infer a delete from the client not including a video; that would
                             // silently destroy videos added by the Chrome extension or another session.
-                            merged.push(ext);
+                            // But still strip any tombstoned notes defensively.
+                            const extNotes = (ext.notes || []).filter(n => {
+                                if (n.id && deletedNoteIds[n.id]) { droppedNoteTombstones++; return false; }
+                                return true;
+                            });
+                            merged.push({ ...ext, notes: extNotes });
                         } else if (!ext) {
-                            // Video only in incoming — add it
-                            merged.push(inc);
+                            // Video only in incoming — add it, stripping tombstoned notes
+                            const incNotes = (inc.notes || []).filter(n => {
+                                if (n.id && deletedNoteIds[n.id]) { droppedNoteTombstones++; return false; }
+                                return true;
+                            });
+                            merged.push({ ...inc, notes: incNotes });
                         } else {
                             // Video exists in both — merge notes
                             const extNotes = ext.notes || [];
                             const incNotes = inc.notes || [];
                             const noteMap = new Map();
 
-                            // Start with existing notes
+                            // Start with existing notes (skip tombstoned)
                             for (const note of extNotes) {
+                                if (note.id && deletedNoteIds[note.id]) { droppedNoteTombstones++; continue; }
                                 noteMap.set(note.id, note);
                             }
 
-                            // Merge incoming notes: keep longer text, preserve favorites
+                            // Merge incoming notes: keep longer text, preserve favorites (skip tombstoned)
                             for (const note of incNotes) {
+                                if (note.id && deletedNoteIds[note.id]) { droppedNoteTombstones++; continue; }
                                 const existing = noteMap.get(note.id);
                                 if (!existing) {
                                     noteMap.set(note.id, note);
@@ -4491,8 +4577,9 @@ Format your response as JSON with a "message" field explaining this, and include
 
                     const notesBefore = existing.reduce((sum, v) => sum + (v.notes || []).length, 0);
                     const notesAfter = merged.reduce((sum, v) => sum + (v.notes || []).length, 0);
-                    console.log(`📚 Merge result: ${existing.length} → ${merged.length} videos, ${notesBefore} → ${notesAfter} notes`);
-                    if (notesAfter < notesBefore) {
+                    console.log(`📚 Merge result: ${existing.length} → ${merged.length} videos, ${notesBefore} → ${notesAfter} notes${droppedNoteTombstones ? ` (dropped ${droppedNoteTombstones} tombstoned note-hits)` : ''}`);
+                    // A drop is only concerning if it wasn't explained by tombstones.
+                    if (notesAfter < notesBefore && droppedNoteTombstones === 0) {
                         console.warn(`⚠️ NOTE COUNT DECREASED after merge — this should not happen!`);
                     }
 
@@ -4511,6 +4598,37 @@ Format your response as JSON with a "message" field explaining this, and include
         }
     }
 
+    // DELETE /bookmarks/:videoId/notes/:noteId — remove a single note by ID.
+    // Must come before the /bookmarks/:id route since both use startsWith('/bookmarks/').
+    if (req.method === 'DELETE' && /^\/bookmarks\/[^/]+\/notes\/[^/]+$/.test(url.pathname)) {
+        const userId = authenticateRequest(req);
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Unauthorized' }));
+            return;
+        }
+        const parts = url.pathname.split('/');
+        const videoId = decodeURIComponent(parts[2]);
+        const noteId = decodeURIComponent(parts[4]);
+        const bookmarks = readUserBookmarks(userId);
+        let removed = false;
+        const updated = bookmarks.map(v => {
+            if (v.id !== videoId) return v;
+            const before = (v.notes || []).length;
+            const notes = (v.notes || []).filter(n => n.id !== noteId);
+            if (notes.length !== before) removed = true;
+            return { ...v, notes };
+        });
+        if (removed) writeUserBookmarks(userId, updated);
+        // Always tombstone so a stale client cannot resurrect the note via POST merge,
+        // whether the note was present here or not.
+        addNoteTombstone(userId, noteId);
+        console.log(`🗑️ DELETE /bookmarks/${videoId}/notes/${noteId} for user ${userId}${removed ? '' : ' (already absent, tombstoned)'}`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
+        return;
+    }
+
     // DELETE /bookmarks/:id — remove a single video by ID
     if (req.method === 'DELETE' && url.pathname.startsWith('/bookmarks/')) {
         const userId = authenticateRequest(req);
@@ -4527,13 +4645,13 @@ Format your response as JSON with a "message" field explaining this, and include
         }
         const bookmarks = readUserBookmarks(userId);
         const filtered = bookmarks.filter(v => v.id !== videoId);
-        if (filtered.length === bookmarks.length) {
-            res.writeHead(404, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Video not found' }));
-            return;
-        }
-        writeUserBookmarks(userId, filtered);
-        console.log(`🗑️ DELETE /bookmarks/${videoId} for user ${userId}`);
+        const wasPresent = filtered.length !== bookmarks.length;
+        if (wasPresent) writeUserBookmarks(userId, filtered);
+        // Always record a tombstone so a stale client cannot resurrect the video
+        // via the POST /bookmarks union merge. Safe to set even when the video is
+        // absent — covers the race where a prior POST is still in flight.
+        addVideoTombstone(userId, videoId);
+        console.log(`🗑️ DELETE /bookmarks/${videoId} for user ${userId}${wasPresent ? '' : ' (already absent, tombstoned)'}`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true }));
         return;
@@ -4681,6 +4799,10 @@ Format your response as JSON with a "message" field explaining this, and include
             if (strategy === 'replace') {
                 writeUserBookmarks(userId, importBookmarks);
                 writeUserCategories(userId, importCategories);
+                // Clear tombstones (videos + notes) — user explicitly wants this
+                // data back, and any IDs in the backup that matched tombstones
+                // would otherwise be silently stripped on the next client sync.
+                writeUserTombstones(userId, { videos: {}, notes: {} });
                 result = {
                     success: true,
                     strategy: 'replace',
@@ -4724,6 +4846,7 @@ Format your response as JSON with a "message" field explaining this, and include
                 // Merge bookmarks (dedup by sourceType:sourceId)
                 let added = 0;
                 let skipped = 0;
+                const revivedIds = [];
                 for (const b of importBookmarks) {
                     const key = b.sourceType && b.sourceId
                         ? `${b.sourceType}:${b.sourceId}`
@@ -4738,12 +4861,34 @@ Format your response as JSON with a "message" field explaining this, and include
                         }
                         existingBookmarks.push(b);
                         existingKeys.add(key);
+                        if (b.id) revivedIds.push(b.id);
                         added++;
                     }
                 }
 
                 writeUserBookmarks(userId, existingBookmarks);
                 writeUserCategories(userId, existingCategories);
+
+                // Un-tombstone any revived video IDs and their note IDs so the
+                // next sync won't strip them.
+                if (revivedIds.length) {
+                    const revivedNoteIds = new Set();
+                    for (const b of importBookmarks) {
+                        if (!b.id || !revivedIds.includes(b.id)) continue;
+                        for (const n of (b.notes || [])) {
+                            if (n.id) revivedNoteIds.add(n.id);
+                        }
+                    }
+                    const tomb = readUserTombstones(userId);
+                    let changed = false;
+                    for (const id of revivedIds) {
+                        if (tomb.videos[id]) { delete tomb.videos[id]; changed = true; }
+                    }
+                    for (const id of revivedNoteIds) {
+                        if (tomb.notes[id]) { delete tomb.notes[id]; changed = true; }
+                    }
+                    if (changed) writeUserTombstones(userId, tomb);
+                }
 
                 result = {
                     success: true,
