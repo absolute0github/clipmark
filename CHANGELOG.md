@@ -4,6 +4,12 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] - 2026-04-20
+
+### Fixed
+- **YouTube metadata (publishDate, description, thumbnail) missing on new videos** — The production YouTube Data API key has an IP allowlist restriction in Google Cloud Console. Hetzner's outbound IPv6 (`2a01:4f9:c012:62dc::1`) is not allowlisted, and Node's `fetchUrl` was defaulting to IPv6, so every server-side YouTube API call returned `403 API_KEY_IP_ADDRESS_BLOCKED`. Server-side flows (Chrome extension quick-add, `/api/youtube/video` backfill) therefore saved videos without a publishDate. Both `fetchUrl` call sites for `googleapis.com/youtube/v3` now pass `forceIPv4: true` so requests go over the allowlisted IPv4.
+  - `transcript-server.js`: `fetchVideoMetadata` and the `/api/youtube/video` proxy both force IPv4
+
 ## [Unreleased] - 2026-04-07
 
 ### Fixed
@@ -47,7 +53,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Files Modified
 - `app.html` — `fetchVideoMetadata`: channel name matched against categories before title-based suggestion; `handleAddVideo`: made async, auto-fetches YouTube API metadata after add; VideoCard/VideoListItem: removed "Get Details" button; header logo wrapped in `<button>` with onClick to navigate home
 
-## [3.4.47] - 2026-04-20
+## [3.4.48] - 2026-04-20
 
 ### Fixed
 - **Deleted videos returning after page refresh** — Two-part race condition: (1) `handleDeleteVideo` was fire-and-forgetting the `DELETE /bookmarks/:id` request while immediately calling `setVideos()`, causing the debounced save effect (500ms) to fire a POST that raced the DELETE and re-added the video via the server's merge logic. Fixed by making `handleDeleteVideo` `async` and awaiting the server DELETE before updating React state. (2) The POST `/bookmarks` merge on the server was unconditionally re-adding any video present on the server but absent from the incoming payload ("server-only videos"), which defeated a successful DELETE whenever a subsequent sync arrived. Fixed by dropping server-only videos (treating the client payload as authoritative — the client holds the post-delete truth).
@@ -56,7 +62,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `app.html` — `handleDeleteVideo` made `async`; server DELETE is now awaited before `setVideos()` so the debounced save cannot race the deletion
 - `transcript-server.js` — POST `/bookmarks` merge: server-only videos (not in incoming payload) are now dropped instead of unconditionally re-added
 
-## [3.4.47] - 2026-04-20
+## [3.4.48] - 2026-04-20
 
 ### Fixed
 - **"Get Context" no longer requires a second manual click for AI-generated transcripts** — On production (Hetzner), YouTube's timedtext and innertube APIs fail due to bot detection, so Gemini is always used as a background job. Previously this showed a "click again in 30-60 seconds" message. Now the button stays in loading state and automatically polls `/api/transcript/status` every 5 seconds until the transcript is ready, then applies it to the note field without any user action. Polling times out after 5 minutes.

@@ -634,7 +634,8 @@ async function fetchVideoMetadata(sourceType, sourceId, sourceUrl) {
             // Try YouTube API first if configured
             if (YOUTUBE_API_KEY) {
                 const ytResponse = await fetchUrl(
-                    `https://www.googleapis.com/youtube/v3/videos?id=${sourceId}&part=snippet&key=${YOUTUBE_API_KEY}`
+                    `https://www.googleapis.com/youtube/v3/videos?id=${sourceId}&part=snippet&key=${YOUTUBE_API_KEY}`,
+                    { forceIPv4: true }
                 );
                 if (ytResponse.status === 200) {
                     const data = JSON.parse(ytResponse.data);
@@ -4149,7 +4150,8 @@ const server = http.createServer(async (req, res) => {
 
         try {
             const youtubeResponse = await fetchUrl(
-                `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet&key=${YOUTUBE_API_KEY}`
+                `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet&key=${YOUTUBE_API_KEY}`,
+                { forceIPv4: true }
             );
 
             if (youtubeResponse.status !== 200) {
