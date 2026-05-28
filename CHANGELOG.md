@@ -4,6 +4,17 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] - 2026-05-02
+
+### Fixed
+- **Production YouTube transcript fallback stuck on timeout** — Hetzner production IPs are frequently bot-blocked by YouTube, so timedtext, yt-dlp, and Innertube can all fail with 429 / "Sign in to confirm you're not a bot." The Gemini fallback was also trying deprecated/slow models (`gemini-2.5-flash`, `gemini-1.5-flash`), which caused background transcript jobs to time out and left users seeing `[AI transcription failed: Request timeout]`. The fallback now tries current faster Gemini models first (`gemini-3.1-flash-lite`, `gemini-3.5-flash`, `gemini-2.5-flash-lite`), handles `HH:MM:SS` timestamp strings if Gemini returns them, and treats cached Gemini transcripts as usable so a successful fallback does not repeatedly re-trigger blocked YouTube fetches.
+  - `transcript-server.js`: updated Gemini transcript model order, timestamp parsing, and usable cache sources
+
+- **Get Context transcript lag during playback** — `Get Context` was using React's `currentTime` state, which only updates from player adapters once per second, so context could be captured behind the exact playback position. The click handler now reads the live player time from `playerRef.current.getCurrentTime()` before extracting transcript context, updates the displayed timestamp to that captured time, and keeps that timestamp stable while any transcript polling completes.
+  - `app.html`: added live timestamp capture helper; `handleLoadContext` uses the captured player time for stored, cached, fetched, and polled transcripts
+  - `app.html`: transcript word slicing now returns the configured number of words before and after the timestamp boundary instead of anchoring on the closest interpolated word
+  - `app.html`: `handleAddNote` also reads the live player time so saved note timestamps match the context point
+
 ## [Unreleased] - 2026-04-20
 
 ### Fixed

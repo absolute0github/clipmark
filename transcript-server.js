@@ -1553,14 +1553,14 @@ function writeTranscriptCache(cache) {
     }
 }
 
-function getCachedTranscript(videoId) {
+function getCachedTranscriptEntry(videoId) {
     const cache = readTranscriptCache();
     const entry = cache[videoId];
     if (entry && entry.timestamp && entry.transcript) {
         const age = Date.now() - entry.timestamp;
         if (age < CACHE_DURATION_MS) {
-            console.log(`✅ Cache hit for ${videoId} (age: ${Math.round(age / 1000 / 60)} minutes)`);
-            return entry.transcript;
+            console.log(`✅ Cache hit for ${videoId} (age: ${Math.round(age / 1000 / 60)} minutes, source: ${entry.source || 'legacy'})`);
+            return entry;
         } else {
             console.log(`⚠️ Cache expired for ${videoId} (age: ${Math.round(age / 1000 / 60 / 60)} hours)`);
         }
@@ -1568,14 +1568,19 @@ function getCachedTranscript(videoId) {
     return null;
 }
 
-function cacheTranscript(videoId, transcript) {
+function getCachedTranscript(videoId) {
+    return getCachedTranscriptEntry(videoId)?.transcript || null;
+}
+
+function cacheTranscript(videoId, transcript, source = 'unknown') {
     const cache = readTranscriptCache();
     cache[videoId] = {
         timestamp: Date.now(),
+        source,
         transcript: transcript
     };
     writeTranscriptCache(cache);
-    console.log(`💾 Cached transcript for ${videoId} (${transcript.length} segments)`);
+    console.log(`💾 Cached transcript for ${videoId} (${transcript.length} segments, source: ${source})`);
 }
 
 // Wait for rate limiting
@@ -2088,9 +2093,34 @@ function parseTranscriptData(data) {
 }
 
 // Gemini API method - uses Gemini to extract transcript from YouTube video
-// Completely bypasses YouTube scraping, works regardless of IP rate limits
-// Tries multiple models in order — older models get deprecated, billing caps vary
-const GEMINI_TRANSCRIPT_MODELS = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+// Completely bypasses YouTube scraping, works regardless of IP rate limits.
+// Tries multiple models in order — older models get deprecated, billing caps vary,
+// and some models time out on long YouTube videos. Keep fast/current models first.
+const GEMINI_TRANSCRIPT_MODELS = [
+    'gemini-3.1-flash-lite',
+    'gemini-3.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-flash'
+];
+
+function parseGeminiTimeValue(value, fallback = 0) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value !== 'string') return fallback;
+
+    const trimmed = value.trim();
+    if (!trimmed) return fallback;
+
+    // Gemini sometimes returns timestamp strings such as "00:17" or "1:02:03".
+    if (trimmed.includes(':')) {
+        const parts = trimmed.split(':').map(part => Number(part));
+        if (parts.every(Number.isFinite)) {
+            return parts.reduce((total, part) => (total * 60) + part, 0);
+        }
+    }
+
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
 
 async function getTranscriptViaGemini(videoId) {
     if (!GEMINI_API_KEY) return null;
@@ -2100,7 +2130,7 @@ async function getTranscriptViaGemini(videoId) {
         contents: [{
             parts: [
                 {
-                    text: 'Extract the complete transcript from this YouTube video. Break it into segments of roughly 5-10 seconds each with accurate start timestamps. Return ONLY a raw JSON array (no markdown, no code fences) with objects: {"start": <seconds as number>, "duration": <seconds as number>, "text": "<spoken text>"}.'
+                    text: 'Extract the complete transcript from this YouTube video. Break it into segments of roughly 5-10 seconds each with accurate start timestamps. Return ONLY a raw JSON array (no markdown, no code fences) with objects: {"start": <seconds as number>, "duration": <seconds as number>, "text": "<spoken text>"}. Use numeric seconds for start and duration, not HH:MM:SS strings.'
                 },
                 {
                     fileData: {
@@ -2130,7 +2160,7 @@ async function getTranscriptViaGemini(videoId) {
                     'User-Agent': 'ClipMark/1.0'
                 },
                 body: payload,
-                timeout: 300000  // Up to 5 min for long videos
+                timeout: 180000  // Up to 3 min for long videos; fallback models should fail over before Cloudflare limits
             });
 
             if (response.status === 404) {
@@ -2246,8 +2276,8 @@ async function getTranscriptViaGemini(videoId) {
                 const segments = JSON.parse(text);
                 if (Array.isArray(segments) && segments.length > 0) {
                     const transcript = segments.map(s => ({
-                        start: parseFloat(s.start) || 0,
-                        duration: parseFloat(s.duration) || 5,
+                        start: parseGeminiTimeValue(s.start, 0),
+                        duration: parseGeminiTimeValue(s.duration, 5) || 5,
                         text: String(s.text || '').trim()
                     })).filter(t => t.text);
 
@@ -2331,9 +2361,15 @@ async function getTranscript(videoId) {
     }
 
     // Check cache first
-    const cached = getCachedTranscript(videoId);
-    if (cached) {
+    const cachedEntry = getCachedTranscriptEntry(videoId);
+    const cached = cachedEntry?.transcript || null;
+    const cachedSource = cachedEntry?.source || 'legacy';
+    const cachedIsUsable = ['timedtext', 'yt-dlp', 'innertube', 'gemini'].includes(cachedSource);
+    if (cached && cachedIsUsable) {
         return cached;
+    }
+    if (cached) {
+        console.log(`⚠️ Cached transcript for ${videoId} is ${cachedSource}; refreshing precise captions before using it`);
     }
 
     // Check if this video recently failed — avoid infinite retry loop
@@ -2356,11 +2392,11 @@ async function getTranscript(videoId) {
         const transcript = await getTranscriptTimedText(videoId);
         if (transcript && transcript.length > 0) {
             console.log(`✅ Got ${transcript.length} segments via timedtext (fast path)`);
-            cacheTranscript(videoId, transcript);
+            cacheTranscript(videoId, transcript, 'timedtext');
             return transcript;
         }
     } catch (e) {
-        console.log(`Timedtext fast path failed: ${e.message} — falling back to Gemini`);
+        console.log(`Timedtext fast path failed: ${e.message} — falling back to yt-dlp`);
     }
 
     // Method 2: yt-dlp subtitle download — works from any IP, handles YouTube auth.
@@ -2370,7 +2406,7 @@ async function getTranscript(videoId) {
         const transcript = await getTranscriptYtDlp(videoId);
         if (transcript && transcript.length > 0) {
             console.log(`✅ Got ${transcript.length} segments via yt-dlp`);
-            cacheTranscript(videoId, transcript);
+            cacheTranscript(videoId, transcript, 'yt-dlp');
             return transcript;
         }
     } catch (e) {
@@ -2384,11 +2420,16 @@ async function getTranscript(videoId) {
         const transcript = await getTranscriptInnertube(videoId);
         if (transcript && transcript.length > 0) {
             console.log(`✅ Got ${transcript.length} segments via innertube (fast path)`);
-            cacheTranscript(videoId, transcript);
+            cacheTranscript(videoId, transcript, 'innertube');
             return transcript;
         }
     } catch (e) {
-        console.log(`Innertube method failed: ${e.message} — falling back to Gemini`);
+        console.log(`Innertube method failed: ${e.message}`);
+    }
+
+    if (cached) {
+        console.log(`⚠️ Precise transcript refresh failed for ${videoId}; using cached ${cachedSource} transcript`);
+        return cached;
     }
 
     // Method 4: Gemini API — reliable from any IP, but slow (30-60s for background job).
@@ -2399,7 +2440,7 @@ async function getTranscript(videoId) {
         const job = getTranscriptViaGemini(videoId)
             .then(transcript => {
                 if (transcript && transcript.length > 0) {
-                    cacheTranscript(videoId, transcript);
+                    cacheTranscript(videoId, transcript, 'gemini');
                     failedGeminiJobs.delete(videoId); // Clear failure record on success
                     console.log(`✅ Background Gemini job completed for ${videoId}: ${transcript.length} segments`);
                 } else {
@@ -4916,9 +4957,11 @@ Format your response as JSON with a "message" field explaining this, and include
     // Transcript job status (for debugging)
     if (url.pathname === '/api/transcript/status') {
         const videoId = url.searchParams.get('v');
+        const cachedEntry = videoId ? getCachedTranscriptEntry(videoId) : null;
         const status = {
             videoId,
-            hasCached: videoId ? !!getCachedTranscript(videoId) : false,
+            hasCached: !!cachedEntry,
+            cachedSource: cachedEntry?.source || null,
             isPending: videoId ? pendingGeminiJobs.has(videoId) : false,
             failedJob: videoId ? failedGeminiJobs.get(videoId) || null : null,
             geminiConfigured: !!GEMINI_API_KEY,
