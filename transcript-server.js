@@ -4385,6 +4385,154 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // YouTube search - no auth required, rate limited by IP
+    if (url.pathname === '/api/youtube/search' && req.method === 'GET') {
+        const q = url.searchParams.get('q');
+        const page = parseInt(url.searchParams.get('page') || '1', 10);
+        const clientYoutubeApiKey = url.searchParams.get('youtubeApiKey') || '';
+
+        if (!q || !q.trim()) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Query parameter "q" is required' }));
+            return;
+        }
+
+        // Rate limit by IP
+        const ipIdentifier = `search:${getClientIdentifier(req)}`;
+        const rateLimit = checkSearchRateLimit(ipIdentifier);
+        if (!rateLimit.allowed) {
+            res.writeHead(429, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: `Rate limit exceeded. You can search up to ${MAX_SEARCHES_PER_HOUR} times per hour. Try again in ${rateLimit.waitMinutes} minutes.`
+            }));
+            return;
+        }
+
+        const encodedQ = encodeURIComponent(q.trim());
+
+        // Try each Invidious instance in order
+        let invidiousResults = null;
+        for (const instance of INVIDIOUS_INSTANCES) {
+            try {
+                const invUrl = `${instance}/api/v1/search?q=${encodedQ}&page=${page}&type=video`;
+                const response = await fetchUrl(invUrl, { timeout: 5000 });
+                if (response.status === 200) {
+                    const items = JSON.parse(response.data);
+                    if (Array.isArray(items)) {
+                        invidiousResults = items
+                            .filter(item => item.type === 'video')
+                            .map(item => {
+                                const thumbs = item.videoThumbnails || [];
+                                const mediumThumb = thumbs.find(t => t.quality === 'medium');
+                                const thumbnail = mediumThumb?.url || thumbs[0]?.url
+                                    || `https://i.ytimg.com/vi/${item.videoId}/mqdefault.jpg`;
+                                return {
+                                    videoId: item.videoId,
+                                    title: item.title,
+                                    channel: item.author,
+                                    thumbnail,
+                                    durationSeconds: item.lengthSeconds || 0,
+                                    duration: formatDuration(item.lengthSeconds || 0),
+                                    publishedText: item.publishedText || '',
+                                    viewCount: item.viewCount || 0,
+                                };
+                            });
+                        console.log(`✅ YouTube search via Invidious (${instance}): ${invidiousResults.length} results for "${q}"`);
+                        break;
+                    }
+                }
+            } catch (e) {
+                console.log(`⚠️ Invidious instance ${instance} failed: ${e.message}`);
+            }
+        }
+
+        if (invidiousResults !== null) {
+            recordSearchAttempt(ipIdentifier);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ results: invidiousResults, source: 'invidious', page }));
+            return;
+        }
+
+        // Fallback: YouTube Data API v3 if key provided
+        if (clientYoutubeApiKey) {
+            try {
+                const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodedQ}&type=video&maxResults=20&key=${encodeURIComponent(clientYoutubeApiKey)}`;
+                const searchResponse = await fetchUrl(searchUrl, { forceIPv4: true, timeout: 10000 });
+
+                if (searchResponse.status !== 200) {
+                    throw new Error(`YouTube API returned ${searchResponse.status}`);
+                }
+
+                const searchData = JSON.parse(searchResponse.data);
+                const items = searchData.items || [];
+                const videoIds = items.map(item => item.id?.videoId).filter(Boolean);
+
+                // Fetch content details (duration) and statistics (viewCount) for all videos
+                let detailsMap = {};
+                if (videoIds.length > 0) {
+                    try {
+                        const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics&id=${videoIds.join(',')}&key=${encodeURIComponent(clientYoutubeApiKey)}`;
+                        const detailsResponse = await fetchUrl(detailsUrl, { forceIPv4: true, timeout: 10000 });
+                        if (detailsResponse.status === 200) {
+                            const detailsData = JSON.parse(detailsResponse.data);
+                            (detailsData.items || []).forEach(v => {
+                                // Parse ISO 8601 duration (e.g. PT1H2M3S)
+                                const iso = v.contentDetails?.duration || '';
+                                const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+                                const h = parseInt(match?.[1] || '0', 10);
+                                const m = parseInt(match?.[2] || '0', 10);
+                                const s = parseInt(match?.[3] || '0', 10);
+                                const durationSeconds = h * 3600 + m * 60 + s;
+                                detailsMap[v.id] = {
+                                    durationSeconds,
+                                    duration: formatDuration(durationSeconds),
+                                    viewCount: parseInt(v.statistics?.viewCount || '0', 10),
+                                };
+                            });
+                        }
+                    } catch (e) {
+                        console.warn('⚠️ YouTube video details fetch failed:', e.message);
+                    }
+                }
+
+                const youtubeResults = items
+                    .filter(item => item.id?.videoId)
+                    .map(item => {
+                        const vid = item.id.videoId;
+                        const snippet = item.snippet || {};
+                        const details = detailsMap[vid] || { durationSeconds: 0, duration: '0:00', viewCount: 0 };
+                        const thumb = snippet.thumbnails?.medium?.url
+                            || snippet.thumbnails?.default?.url
+                            || `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`;
+                        return {
+                            videoId: vid,
+                            title: snippet.title || '',
+                            channel: snippet.channelTitle || '',
+                            thumbnail: thumb,
+                            durationSeconds: details.durationSeconds,
+                            duration: details.duration,
+                            publishedText: snippet.publishedAt ? new Date(snippet.publishedAt).toLocaleDateString() : '',
+                            viewCount: details.viewCount,
+                        };
+                    });
+
+                console.log(`✅ YouTube search via YouTube API: ${youtubeResults.length} results for "${q}"`);
+                recordSearchAttempt(ipIdentifier);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ results: youtubeResults, source: 'youtube', page }));
+                return;
+            } catch (e) {
+                console.error('YouTube search API fallback failed:', e.message);
+            }
+        }
+
+        // Everything failed
+        console.error(`❌ YouTube search failed for "${q}" — all Invidious instances down, no API key`);
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Search unavailable' }));
+        return;
+    }
+
     // =============================================
     // TRANSCRIPT ENDPOINTS
     // =============================================

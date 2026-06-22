@@ -4,6 +4,13 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] - 2026-06-22
+
+### Added
+- **YouTube Search** — slide-over panel lets users search YouTube directly from the app header and add results to their library with one click.
+  - `transcript-server.js`: new `GET /api/youtube/search?q=&page=` endpoint; tries Invidious instances in order (5-second timeout each), falls back to YouTube Data API v3 when a `youtubeApiKey` query param is supplied; rate limited 30 searches/hour per IP; returns `{ results, source, page }` with normalized shape `{ videoId, title, channel, thumbnail, durationSeconds, duration, publishedText, viewCount }`; added `INVIDIOUS_INSTANCES`, `formatDuration`, `checkSearchRateLimit`, `recordSearchAttempt` helpers
+  - `app.html`: `YouTubeSearchPanel` slide-over component with search bar, source badge, paginated results, thumbnail+duration+viewcount display, per-result Add/Added state; `handleYouTubeSearch`, `handleAddFromSearch` functions; YouTube Search button in app header; seven new state variables (`showYouTubeSearch`, `ytSearchQuery`, `ytSearchResults`, `ytSearchLoading`, `ytSearchError`, `ytSearchPage`, `ytSearchSource`, `ytAddedIds`)
+
 ## [Unreleased] - 2026-05-02
 
 ### Fixed

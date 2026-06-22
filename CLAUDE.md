@@ -36,6 +36,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Quick-Add API**: External endpoint (`POST /api/clips/quick-add`) for adding videos from URLs with auto-metadata fetching
 - **Chrome Extension**: "ClipMark - Save to Library" — one-click video saving from YouTube with timestamp capture and optional notes
 - **Mobile/Tablet Responsive Layout**: Fully responsive design with hamburger menu, slide-over sidebar drawer, bottom tab navigation on mobile, stacked player/notes on tablet portrait, and touch-friendly controls
+- **YouTube Search**: Slide-over search panel in the app header; searches via Invidious (no key needed) with YouTube Data API v3 fallback; one-click add to library
 
 ## Architecture
 
