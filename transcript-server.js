@@ -25,9 +25,11 @@ function compileAppHtml() {
             ],
         });
         // Replace: remove Babel CDN script, change text/babel script to plain script
+        // Use a function for the replacement to avoid $1/$& special pattern interpretation
+        const compiledScript = result.code;
         compiledAppHtml = raw
             .replace(/\s*<script src="[^"]*babel[^"]*"[^>]*><\/script>/, '')
-            .replace(/(<script[^>]+type="text\/babel"[^>]*>)([\s\S]*?)(<\/script>)/, `<script>${result.code}</script>`);
+            .replace(/(<script[^>]+type="text\/babel"[^>]*>)([\s\S]*?)(<\/script>)/, () => `<script>${compiledScript}</script>`);
         console.log('✅ app.html JSX pre-compiled (Babel removed from client)');
     } catch (err) {
         console.warn('⚠️ JSX pre-compilation failed, serving raw app.html:', err.message);
