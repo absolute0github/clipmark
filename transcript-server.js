@@ -5,6 +5,36 @@
 // Load environment variables from .env file
 require('dotenv').config();
 
+// Pre-compile app.html JSX at startup so browsers receive plain JS (no Babel needed client-side)
+let compiledAppHtml = null;
+function compileAppHtml() {
+    try {
+        const babel = require('@babel/core');
+        const raw = fs.readFileSync(path.join(__dirname, 'app.html'), 'utf-8');
+        // Extract the text/babel script block (lazy match to get first closing tag)
+        const m = raw.match(/(<script[^>]+type="text\/babel"[^>]*>)([\s\S]*?)(<\/script>)/);
+        if (!m) { console.warn('⚠️ No text/babel script found in app.html'); return; }
+        const jsx = m[2];
+        const result = babel.transformSync(jsx, {
+            filename: 'app.jsx',
+            presets: [['@babel/preset-react', { runtime: 'classic' }]],
+            plugins: [
+                '@babel/plugin-transform-optional-chaining',
+                '@babel/plugin-transform-nullish-coalescing-operator',
+                '@babel/plugin-transform-logical-assignment-operators',
+            ],
+        });
+        // Replace: remove Babel CDN script, change text/babel script to plain script
+        compiledAppHtml = raw
+            .replace(/\s*<script src="[^"]*babel[^"]*"[^>]*><\/script>/, '')
+            .replace(/(<script[^>]+type="text\/babel"[^>]*>)([\s\S]*?)(<\/script>)/, `<script>${result.code}</script>`);
+        console.log('✅ app.html JSX pre-compiled (Babel removed from client)');
+    } catch (err) {
+        console.warn('⚠️ JSX pre-compilation failed, serving raw app.html:', err.message);
+        compiledAppHtml = null;
+    }
+}
+
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
@@ -5122,6 +5152,12 @@ Format your response as JSON with a "message" field explaining this, and include
     if (url.pathname === '/') {
         filePath = '/index.html';
     } else if (appRoutes.includes(url.pathname)) {
+        // Serve pre-compiled version if available (no Babel needed client-side)
+        if (compiledAppHtml) {
+            res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' });
+            res.end(compiledAppHtml);
+            return;
+        }
         filePath = '/app.html';
     } else {
         filePath = url.pathname;
@@ -5159,6 +5195,8 @@ Format your response as JSON with a "message" field explaining this, and include
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not found' }));
 });
+
+compileAppHtml();
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n${'='.repeat(50)}`);
