@@ -1,7 +1,7 @@
 // ClipMark Service Worker v1.0
 // Provides offline caching for the PWA shell
 
-const CACHE_NAME = 'clipmark-v1';
+const CACHE_NAME = 'clipmark-v2';
 const SHELL_URLS = [
   '/app.html',
   '/favicon.ico',
@@ -41,8 +41,12 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (event.request.method !== 'GET') return;
 
-  // API calls: network only (bookmarks, transcripts need fresh data)
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/transcript')) {
+  // API calls and auth: network only (must always be fresh)
+  if (url.pathname.startsWith('/api/') ||
+      url.pathname.startsWith('/transcript') ||
+      url.pathname.startsWith('/auth/') ||
+      url.pathname === '/bookmarks' ||
+      url.pathname === '/categories') {
     return;
   }
 

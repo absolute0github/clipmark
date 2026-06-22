@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>ClipMark - Mark the Moments That Matter</title>
 
     <!-- Favicons and Apple Touch Icons -->
@@ -20,8 +20,8 @@
     <link rel="manifest" href="/manifest.json">
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Syne:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
@@ -38,6 +38,7 @@
                 inset: 0;
                 z-index: 40;
                 background: rgba(0,0,0,0.5);
+                -webkit-backdrop-filter: blur(2px);
                 backdrop-filter: blur(2px);
             }
             .mobile-sidebar-drawer {
@@ -5217,7 +5218,6 @@ Third subtitle text`}
                                         placeholder="Enter username"
                                         className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                                         autoComplete="username"
-                                        autoFocus
                                     />
                                 </div>
 
@@ -5337,8 +5337,8 @@ Third subtitle text`}
 
             // Return modal version
             return (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-                    <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+                <div className="fixed inset-0 bg-black/70 flex items-start justify-center z-50 overflow-y-auto pt-8 pb-8">
+                    <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl my-auto">
                         {formContent}
                     </div>
                 </div>
@@ -6376,11 +6376,17 @@ Third subtitle text`}
 
                     // Fetch server API status (Gemini/YouTube configured)
                     try {
-                        const statusResponse = await fetch(`${SERVER_URL}/api/status`);
-                        if (statusResponse.ok) {
-                            const status = await statusResponse.json();
-                            setApiStatus(status);
-                            console.log(`✅ API Status: Gemini=${status.geminiConfigured}, YouTube=${status.youtubeConfigured}`);
+                        const statusController = new AbortController();
+                        const statusTimeout = setTimeout(() => statusController.abort(), 5000);
+                        try {
+                            const statusResponse = await fetch(`${SERVER_URL}/api/status`, { signal: statusController.signal });
+                            if (statusResponse.ok) {
+                                const status = await statusResponse.json();
+                                setApiStatus(status);
+                                console.log(`✅ API Status: Gemini=${status.geminiConfigured}, YouTube=${status.youtubeConfigured}`);
+                            }
+                        } finally {
+                            clearTimeout(statusTimeout);
                         }
                     } catch (e) {
                         console.warn('Could not fetch API status:', e.message);
@@ -6419,9 +6425,17 @@ Third subtitle text`}
                     // If we have a saved token, verify it with the server
                     if (savedToken) {
                         try {
-                            const checkResponse = await fetch(`${SERVER_URL}/auth/check`, {
-                                headers: { 'Authorization': `Bearer ${savedToken}` }
-                            });
+                            const authController = new AbortController();
+                            const authTimeout = setTimeout(() => authController.abort(), 5000);
+                            let checkResponse;
+                            try {
+                                checkResponse = await fetch(`${SERVER_URL}/auth/check`, {
+                                    headers: { 'Authorization': `Bearer ${savedToken}` },
+                                    signal: authController.signal
+                                });
+                            } finally {
+                                clearTimeout(authTimeout);
+                            }
 
                             if (checkResponse.ok) {
                                 const checkData = await checkResponse.json();
@@ -8330,7 +8344,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
             // Show loading screen while checking authentication
             if (authLoading) {
                 return (
-                    <div className="h-screen flex items-center justify-center bg-gray-900">
+                    <div className="flex items-center justify-center bg-gray-900" style={{minHeight: '100dvh'}}>
                         <div className="text-center">
                             <svg className="animate-spin h-12 w-12 text-emerald-500 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -8459,7 +8473,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
             }
 
             return (
-                <div className="h-screen flex flex-col">
+                <div className="flex flex-col" style={{height: '100dvh'}}>
                     {/* Header */}
                     <header className="bg-gray-800 border-b border-gray-700 px-4 py-2.5 flex items-center gap-3 shrink-0">
 
