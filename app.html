@@ -149,12 +149,28 @@
                 var err = document.getElementById('preload-error');
                 if (spinner) spinner.style.display = 'none';
                 if (msg) msg.style.display = 'none';
-                if (err) err.style.display = 'block';
+                if (err) { err.style.display = 'block'; err.textContent = 'Failed to load app scripts. Check your internet connection or disable any content blockers, then reload.'; }
             }
         };
+
+        // If React hasn't mounted after 15s, show a timeout message
+        window.__reactMounted = false;
+        setTimeout(function() {
+            if (!window.__reactMounted) {
+                var spinner = document.getElementById('preload-spinner');
+                var msg = document.getElementById('preload-msg');
+                var err = document.getElementById('preload-error');
+                if (spinner) spinner.style.display = 'none';
+                if (msg) msg.style.display = 'none';
+                if (err) {
+                    err.style.display = 'block';
+                    err.innerHTML = 'App took too long to load.<br><br><a href="" onclick="location.reload();return false;" style="color:#10b981;text-decoration:underline;">Tap to reload</a>';
+                }
+            }
+        }, 15000);
     </script>
 
-    <script type="text/babel">
+    <script type="text/babel" data-presets="react" data-plugins="proposal-optional-chaining,proposal-nullish-coalescing-operator,proposal-logical-assignment-operators">
         const { useState, useEffect, useRef, useCallback } = React;
 
         // Utility functions
@@ -9867,6 +9883,7 @@ Keep the Notes section exactly as provided above - do not modify the original no
             );
         };
 
+        window.__reactMounted = true;
         ReactDOM.createRoot(document.getElementById('root')).render(<ErrorBoundary><App /></ErrorBoundary>);
     </script>
 <script>
