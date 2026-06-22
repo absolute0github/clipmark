@@ -379,6 +379,11 @@ const quickAddAttempts = new Map(); // Map<userId, {count, resetAt}>
 const MAX_QUICK_ADDS_PER_HOUR = 30;
 const QUICK_ADD_RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
 
+// Rate limiting for YouTube search
+const searchAttempts = new Map(); // Map<identifier, {count, resetAt}>
+const MAX_SEARCHES_PER_HOUR = 30;
+const SEARCH_RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
+
 // =============================================
 // SRT/VTT TRANSCRIPT PARSING
 // =============================================
@@ -593,6 +598,59 @@ function recordQuickAddAttempt(userId) {
         record.count++;
     }
 }
+
+// YouTube search rate limiter
+function checkSearchRateLimit(identifier) {
+    const now = Date.now();
+    const record = searchAttempts.get(identifier);
+
+    if (!record || now > record.resetAt) {
+        return { allowed: true, remaining: MAX_SEARCHES_PER_HOUR };
+    }
+
+    if (record.count >= MAX_SEARCHES_PER_HOUR) {
+        const waitTime = Math.ceil((record.resetAt - now) / 60000);
+        return { allowed: false, remaining: 0, waitMinutes: waitTime };
+    }
+
+    return { allowed: true, remaining: MAX_SEARCHES_PER_HOUR - record.count };
+}
+
+function recordSearchAttempt(identifier) {
+    const now = Date.now();
+    const record = searchAttempts.get(identifier);
+
+    if (!record || now > record.resetAt) {
+        searchAttempts.set(identifier, {
+            count: 1,
+            resetAt: now + SEARCH_RATE_LIMIT_WINDOW
+        });
+    } else {
+        record.count++;
+    }
+}
+
+// Format duration in seconds to "m:ss" or "h:mm:ss"
+function formatDuration(seconds) {
+    if (!seconds || isNaN(seconds)) return '0:00';
+    const s = Math.floor(seconds);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) {
+        return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    }
+    return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+// Invidious instances to try in order
+const INVIDIOUS_INSTANCES = [
+    'https://inv.nadeko.net',
+    'https://invidious.fdn.fr',
+    'https://iv.datura.network',
+    'https://invidious.privacydev.net',
+    'https://yt.cdaut.de',
+];
 
 // Parse video URL into sourceType and sourceId
 function parseVideoUrl(videoUrl) {
