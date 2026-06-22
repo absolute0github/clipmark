@@ -19,10 +19,10 @@
     <meta name="theme-color" content="#10b981">
     <link rel="manifest" href="/manifest.json">
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com" onerror="window.__cdnErrorHandler && window.__cdnErrorHandler()"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" onerror="window.__cdnErrorHandler && window.__cdnErrorHandler()"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" onerror="window.__cdnErrorHandler && window.__cdnErrorHandler()"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js" onerror="window.__cdnErrorHandler && window.__cdnErrorHandler()"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Syne:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         * { font-family: 'Inter', sans-serif; }
@@ -123,7 +123,36 @@
     </style>
 </head>
 <body class="bg-gray-900 text-gray-100">
-    <div id="root"></div>
+    <style>
+        @keyframes cm-spin { to { transform: rotate(360deg); } }
+        #preload { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0f172a; }
+        #preload-spinner { width: 48px; height: 48px; border: 4px solid #374151; border-top-color: #10b981; border-radius: 50%; animation: cm-spin 1s linear infinite; margin-bottom: 16px; }
+        #preload-msg { color: #6b7280; font-size: 14px; font-family: system-ui,-apple-system,sans-serif; margin: 0; }
+        #preload-error { display: none; color: #f87171; font-size: 13px; font-family: system-ui,-apple-system,sans-serif; text-align: center; padding: 0 24px; max-width: 320px; }
+    </style>
+    <div id="root">
+        <div id="preload">
+            <div id="preload-spinner"></div>
+            <p id="preload-msg">Loading ClipMark...</p>
+            <p id="preload-error">Failed to load app scripts. Check your internet connection or disable any content blockers, then reload.</p>
+        </div>
+    </div>
+
+    <script>
+        // Detect CDN script load failures and show a helpful message instead of blank screen
+        window.__cdnErrors = 0;
+        window.__cdnErrorHandler = function() {
+            window.__cdnErrors++;
+            if (window.__cdnErrors >= 1) {
+                var spinner = document.getElementById('preload-spinner');
+                var msg = document.getElementById('preload-msg');
+                var err = document.getElementById('preload-error');
+                if (spinner) spinner.style.display = 'none';
+                if (msg) msg.style.display = 'none';
+                if (err) err.style.display = 'block';
+            }
+        };
+    </script>
 
     <script type="text/babel">
         const { useState, useEffect, useRef, useCallback } = React;
