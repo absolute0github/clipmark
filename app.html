@@ -1050,6 +1050,33 @@ Only return the JSON array, no other text.`;
                     });
                 };
 
+                const readEffectiveYouTubeTime = () => {
+                    const player = playerRef.current;
+                    if (!player) return 0;
+
+                    let rawTime = 0;
+                    try {
+                        rawTime = Number(player.getCurrentTime?.());
+                    } catch (_) {}
+
+                    if (Number.isFinite(rawTime) && rawTime > 0) {
+                        player._lastKnownTime = rawTime;
+                        return rawTime;
+                    }
+
+                    // Fallback for browsers/embeds where the IFrame API reports 0 while
+                    // playback is active. Keep a monotonic timer from the last PLAYING event
+                    // so Get Context and timestamped notes still follow the visible video.
+                    if (player._isPlaying && Number.isFinite(player._manualPlaybackStartTime) && player._manualPlaybackStartAtMs) {
+                        const elapsed = (Date.now() - player._manualPlaybackStartAtMs) / 1000;
+                        const estimatedTime = player._manualPlaybackStartTime + elapsed;
+                        player._lastKnownTime = estimatedTime;
+                        return estimatedTime;
+                    }
+
+                    return Number.isFinite(player._lastKnownTime) ? player._lastKnownTime : 0;
+                };
+
                 const initPlayer = async () => {
                     await loadYouTubeAPI();
 
@@ -1065,47 +1092,31 @@ Only return the JSON array, no other text.`;
                     cleanupPlayer();
 
                     try {
-                        // Pre-create the iframe with the youtube-nocookie.com URL directly.
-                        // This is more reliable than relying on the undocumented YT.Player
-                        // `host` param, which Safari/iPad can ignore. When the YT IFrame API
-                        // receives an element ID that already points to a nocookie iframe with
-                        // enablejsapi=1, it communicates via postMessage without replacing the
-                        // iframe src — guaranteeing the nocookie domain is always used.
-                        const container = document.getElementById(playerId);
-                        if (!container) return;
-                        const existingIframe = container.querySelector('iframe');
-                        if (existingIframe) existingIframe.remove();
+                        // Let the IFrame API create and own the iframe. Pre-creating the
+                        // iframe caused some browsers to expose a player object while
+                        // getCurrentTime() stayed at 0, which broke Get Context timestamps.
+                        container.innerHTML = '';
 
-                        const iframeId = `${playerId}-frame`;
-                        const nocookieParams = new URLSearchParams({
-                            enablejsapi: '1',
-                            origin: window.location.origin,
-                            modestbranding: '1',
-                            rel: '0',
-                            fs: '1',
-                            cc_load_policy: '1',
-                            cc_lang_pref: 'en',
-                            // playsinline=1 is critical on iOS — without it Safari intercepts
-                            // the tap and plays in native fullscreen, which breaks the IFrame API
-                            // postMessage bridge and can trigger YouTube's bot-check prompt.
-                            playsinline: '1',
-                            // widget_referrer helps YouTube recognize the embed origin as legitimate
-                            widget_referrer: window.location.origin,
-                        });
-                        const iframe = document.createElement('iframe');
-                        iframe.id = iframeId;
-                        iframe.src = `https://www.youtube-nocookie.com/embed/${videoId}?${nocookieParams.toString()}`;
-                        iframe.style.width = '100%';
-                        iframe.style.height = '100%';
-                        iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen');
-                        iframe.setAttribute('allowfullscreen', 'true');
-                        iframe.setAttribute('frameborder', '0');
-                        container.appendChild(iframe);
-
-                        playerRef.current = new window.YT.Player(iframeId, {
+                        playerRef.current = new window.YT.Player(playerId, {
+                            videoId,
+                            host: 'https://www.youtube-nocookie.com',
+                            playerVars: {
+                                enablejsapi: 1,
+                                origin: window.location.origin,
+                                modestbranding: 1,
+                                rel: 0,
+                                fs: 1,
+                                cc_load_policy: 1,
+                                cc_lang_pref: 'en',
+                                playsinline: 1,
+                                widget_referrer: window.location.origin,
+                            },
                             events: {
                                 onReady: () => {
                                     if (isMounted) {
+                                        playerRef.current._lastKnownTime = 0;
+                                        playerRef.current._isPlaying = false;
+                                        playerRef.current._getEffectiveCurrentTime = readEffectiveYouTubeTime;
                                         setIsReady(true);
                                         // Apply saved playback speed
                                         try {
@@ -1129,19 +1140,32 @@ Only return the JSON array, no other text.`;
                                         if (playerRef.current._timeInterval) {
                                             clearInterval(playerRef.current._timeInterval);
                                         }
-                                        // Track watch time start
+                                        // Track watch time start and keep a manual clock fallback in case
+                                        // the iframe API reports 0 for getCurrentTime() in this browser.
+                                        const playbackStartTime = readEffectiveYouTubeTime();
+                                        playerRef.current._isPlaying = true;
+                                        playerRef.current._manualPlaybackStartTime = playbackStartTime;
+                                        playerRef.current._manualPlaybackStartAtMs = Date.now();
                                         playerRef.current._watchTimeStart = Date.now();
+                                        onTimeUpdate(playbackStartTime);
                                         // Time update interval
                                         const interval = setInterval(() => {
-                                            if (playerRef.current && playerRef.current.getCurrentTime) {
+                                            if (playerRef.current) {
                                                 try {
-                                                    onTimeUpdate(playerRef.current.getCurrentTime());
+                                                    onTimeUpdate(readEffectiveYouTubeTime());
                                                 } catch (e) {}
                                             }
                                         }, 1000);
                                         playerRef.current._timeInterval = interval;
                                     } else {
                                         // Video stopped/paused
+                                        const stoppedTime = readEffectiveYouTubeTime();
+                                        if (playerRef.current) {
+                                            playerRef.current._lastKnownTime = stoppedTime;
+                                            playerRef.current._isPlaying = false;
+                                            playerRef.current._manualPlaybackStartAtMs = null;
+                                        }
+                                        onTimeUpdate(stoppedTime);
                                         if (playerRef.current && playerRef.current._timeInterval) {
                                             clearInterval(playerRef.current._timeInterval);
                                         }
@@ -7143,11 +7167,19 @@ Third subtitle text`}
 
             const getLivePlayerTime = async (fallbackTime = 0) => {
                 const player = playerRef.current;
-                if (!player || typeof player.getCurrentTime !== 'function') return fallbackTime;
+                if (!player) return fallbackTime;
 
                 try {
-                    const playerTime = await Promise.resolve(player.getCurrentTime());
-                    return Number.isFinite(playerTime) ? playerTime : fallbackTime;
+                    if (typeof player._getEffectiveCurrentTime === 'function') {
+                        const effectiveTime = Number(await Promise.resolve(player._getEffectiveCurrentTime()));
+                        if (Number.isFinite(effectiveTime) && effectiveTime > 0) return effectiveTime;
+                    }
+
+                    if (typeof player.getCurrentTime !== 'function') return fallbackTime;
+                    const playerTime = Number(await Promise.resolve(player.getCurrentTime()));
+                    if (Number.isFinite(playerTime) && playerTime > 0) return playerTime;
+
+                    return Number.isFinite(fallbackTime) ? fallbackTime : 0;
                 } catch (e) {
                     return fallbackTime;
                 }
