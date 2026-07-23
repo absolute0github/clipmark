@@ -7276,7 +7276,7 @@ Third subtitle text`}
                         try {
                             const statusRes = await fetch(`${LOCAL_SERVER}/api/transcript/status?v=${ytVideoId}`);
                             const status = await statusRes.json();
-                            addDebugLog(`poll ${i + 1}/${maxAttempts}: hasCached=${status.hasCached} isPending=${status.isPending} failedJob=${status.failedJob ? JSON.stringify(status.failedJob).substring(0, 200) : 'null'}`);
+                            addDebugLog(`poll ${i + 1}/${maxAttempts}: hasCached=${status.hasCached} isPending=${status.isPending} pendingAge=${status.pendingAgeSeconds ?? 'n/a'}s failedJob=${status.failedJob ? JSON.stringify(status.failedJob).substring(0, 200) : 'null'}`);
                             console.log(`⚡ Transcript poll ${i + 1}/${maxAttempts}:`, status);
                             if (status.hasCached) {
                                 const transcript = await fetchTranscript(ytVideoId);

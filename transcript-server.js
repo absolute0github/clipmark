@@ -1788,21 +1788,35 @@ function fetchUrl(url, options = {}) {
             }
         };
 
+        let settled = false;
+        const finish = (fn, value) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(absoluteTimer);
+            fn(value);
+        };
+
+        const absoluteTimer = setTimeout(() => {
+            req.destroy(new Error('Request timeout'));
+            finish(reject, new Error('Request timeout'));
+        }, options.timeout || 15000);
+
         const req = client.request(reqOptions, (res) => {
             // Handle redirects
             if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                clearTimeout(absoluteTimer);
                 return fetchUrl(res.headers.location, options).then(resolve).catch(reject);
             }
 
             let data = '';
             res.on('data', chunk => data += chunk);
-            res.on('end', () => resolve({ status: res.statusCode, data, headers: res.headers }));
+            res.on('end', () => finish(resolve, { status: res.statusCode, data, headers: res.headers }));
         });
 
-        req.on('error', reject);
+        req.on('error', err => finish(reject, err));
         req.setTimeout(options.timeout || 15000, () => {
-            req.destroy();
-            reject(new Error('Request timeout'));
+            req.destroy(new Error('Request timeout'));
+            finish(reject, new Error('Request timeout'));
         });
 
         if (options.body) {
@@ -2437,12 +2451,44 @@ async function getTranscriptTimedText(videoId) {
 
 // Main transcript function
 // Track in-progress Gemini background jobs
+// Map<videoId, { promise, startedAt, attemptNum }>
 const pendingGeminiJobs = new Map();
 // Track failed Gemini jobs to prevent infinite retry loops
 // Map<videoId, { timestamp, attempts, lastError }>
 const failedGeminiJobs = new Map();
 const MAX_GEMINI_RETRIES = 2;
 const FAILED_JOB_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes before allowing retry
+const GEMINI_JOB_TIMEOUT_MS = 2 * 60 * 1000; // hard cap so jobs cannot stay pending forever
+
+function withTimeout(promise, ms, message) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(message)), ms);
+        promise.then(
+            value => {
+                clearTimeout(timer);
+                resolve(value);
+            },
+            error => {
+                clearTimeout(timer);
+                reject(error);
+            }
+        );
+    });
+}
+
+function expirePendingGeminiJob(videoId, pendingJob) {
+    const ageMs = Date.now() - pendingJob.startedAt;
+    if (ageMs < GEMINI_JOB_TIMEOUT_MS) return false;
+
+    console.log(`❌ Background Gemini job timed out for ${videoId} after ${Math.round(ageMs / 1000)}s`);
+    failedGeminiJobs.set(videoId, {
+        timestamp: Date.now(),
+        attempts: pendingJob.attemptNum,
+        lastError: `AI transcription timed out after ${Math.round(GEMINI_JOB_TIMEOUT_MS / 1000)} seconds`
+    });
+    pendingGeminiJobs.delete(videoId);
+    return true;
+}
 
 async function getTranscript(videoId) {
     // Validate video ID
@@ -2473,6 +2519,19 @@ async function getTranscript(videoId) {
         if (elapsed >= FAILED_JOB_COOLDOWN_MS) {
             failedGeminiJobs.delete(videoId); // Allow retry after cooldown
         }
+    }
+
+    // If a Gemini job is already running, do not rerun timedtext/yt-dlp/Innertube
+    // on every poll. That kept users waiting while also hammering YouTube.
+    const pendingJob = pendingGeminiJobs.get(videoId);
+    if (pendingJob) {
+        if (!expirePendingGeminiJob(videoId, pendingJob)) {
+            const elapsedSeconds = Math.max(1, Math.round((Date.now() - pendingJob.startedAt) / 1000));
+            throw new Error(`Transcript is still being generated (${elapsedSeconds}s elapsed). Please try again in a few seconds.`);
+        }
+
+        const expiredFailure = failedGeminiJobs.get(videoId);
+        throw new Error(`No captions available. AI transcription failed (${expiredFailure?.lastError || 'timed out'}). Try uploading an SRT/VTT file.`);
     }
 
     // Method 1: Try YouTube's timedtext API first — fast (< 2s) when it works.
@@ -2524,10 +2583,14 @@ async function getTranscript(videoId) {
 
     // Method 4: Gemini API — reliable from any IP, but slow (30-60s for background job).
     // Start as background job to avoid Cloudflare 100s timeout on long videos.
-    if (GEMINI_API_KEY && !pendingGeminiJobs.has(videoId)) {
+    if (GEMINI_API_KEY) {
         const attemptNum = (failedJob?.attempts || 0) + 1;
         console.log(`Starting background Gemini transcript job for ${videoId} (attempt ${attemptNum})...`);
-        const job = getTranscriptViaGemini(videoId)
+        const job = withTimeout(
+            getTranscriptViaGemini(videoId),
+            GEMINI_JOB_TIMEOUT_MS,
+            `AI transcription timed out after ${Math.round(GEMINI_JOB_TIMEOUT_MS / 1000)} seconds`
+        )
             .then(transcript => {
                 if (transcript && transcript.length > 0) {
                     cacheTranscript(videoId, transcript, 'gemini');
@@ -2549,23 +2612,29 @@ async function getTranscript(videoId) {
                 // burn retries, and sanitize the user-facing message so it doesn't leak
                 // internal key/IP/referrer details.
                 const isKeyFailure = !!e.keyFailure;
+                const isTimeout = e.message.includes('timed out') || e.message.includes('timeout');
                 const userMsg = isKeyFailure
                     ? 'AI transcription is temporarily unavailable (server configuration issue).'
-                    : e.message.substring(0, 100);
+                    : (isTimeout ? e.message : e.message.substring(0, 100));
                 failedGeminiJobs.set(videoId, {
                     timestamp: Date.now(),
-                    attempts: isKeyFailure ? MAX_GEMINI_RETRIES : attemptNum,
+                    attempts: isKeyFailure || isTimeout ? MAX_GEMINI_RETRIES : attemptNum,
                     lastError: userMsg
                 });
             })
             .finally(() => {
-                pendingGeminiJobs.delete(videoId);
+                const current = pendingGeminiJobs.get(videoId);
+                if (current?.promise === job) {
+                    pendingGeminiJobs.delete(videoId);
+                }
             });
-        pendingGeminiJobs.set(videoId, job);
+        pendingGeminiJobs.set(videoId, {
+            promise: job,
+            startedAt: Date.now(),
+            attemptNum
+        });
 
         throw new Error('Transcript is being generated. Please try again in 30-60 seconds.');
-    } else if (pendingGeminiJobs.has(videoId)) {
-        throw new Error('Transcript is still being generated. Please try again in a few seconds.');
     }
 
     throw new Error('All transcript methods failed. The video may not have captions available.');
@@ -2592,7 +2661,15 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+    let url;
+    try {
+        url = new URL(req.url, `http://localhost:${PORT}`);
+    } catch (e) {
+        console.error(`Invalid request URL: ${req.url}`);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid request URL' }));
+        return;
+    }
 
     // =============================================
     // AUTHENTICATION ENDPOINTS
@@ -5196,11 +5273,17 @@ Format your response as JSON with a "message" field explaining this, and include
     if (url.pathname === '/api/transcript/status') {
         const videoId = url.searchParams.get('v');
         const cachedEntry = videoId ? getCachedTranscriptEntry(videoId) : null;
+        const pendingJob = videoId ? pendingGeminiJobs.get(videoId) : null;
+        if (videoId && pendingJob) {
+            expirePendingGeminiJob(videoId, pendingJob);
+        }
+        const currentPendingJob = videoId ? pendingGeminiJobs.get(videoId) : null;
         const status = {
             videoId,
             hasCached: !!cachedEntry,
             cachedSource: cachedEntry?.source || null,
-            isPending: videoId ? pendingGeminiJobs.has(videoId) : false,
+            isPending: !!currentPendingJob,
+            pendingAgeSeconds: currentPendingJob ? Math.round((Date.now() - currentPendingJob.startedAt) / 1000) : null,
             failedJob: videoId ? failedGeminiJobs.get(videoId) || null : null,
             geminiConfigured: !!GEMINI_API_KEY,
             totalPendingJobs: pendingGeminiJobs.size,
