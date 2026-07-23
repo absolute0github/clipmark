@@ -7147,16 +7147,23 @@ Third subtitle text`}
                 const orderedSegments = [...transcript].sort((a, b) => (Number(a?.start) || 0) - (Number(b?.start) || 0));
                 let sequence = 0;
 
-                orderedSegments.forEach(segment => {
+                orderedSegments.forEach((segment, segmentIdx) => {
                     if (!segment || !segment.text) return;
                     const words = segment.text.split(/\s+/).filter(w => w.trim());
                     const segmentStart = Number(segment.start);
                     if (!Number.isFinite(segmentStart) || words.length === 0) return;
 
+                    const segmentDuration = Number(segment.duration);
+                    const nextSegmentStart = Number(orderedSegments[segmentIdx + 1]?.start);
+                    const usableDuration = Number.isFinite(segmentDuration) && segmentDuration > 0
+                        ? segmentDuration
+                        : (Number.isFinite(nextSegmentStart) && nextSegmentStart > segmentStart ? nextSegmentStart - segmentStart : 2);
+                    const timePerWord = usableDuration / Math.max(words.length, 1);
+
                     words.forEach((word, idx) => {
                         wordData.push({
                             word: word,
-                            timestamp: segmentStart,
+                            timestamp: segmentStart + (idx * timePerWord),
                             sequence: sequence++
                         });
                     });
