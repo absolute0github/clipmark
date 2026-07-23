@@ -7116,40 +7116,55 @@ Third subtitle text`}
                 }
             };
 
-            // Function to extract context words from transcript at a given timestamp
-            const getTranscriptContext = (transcript, timestamp, wordsBefore = 10, wordsAfter = 10) => {
-                if (!transcript || transcript.length === 0) return '';
+            const getTranscriptWordData = (transcript) => {
+                if (!transcript || transcript.length === 0) return [];
 
-                // Build full text with word positions mapped to timestamps
                 const wordData = [];
-                transcript.forEach(segment => {
+                const orderedSegments = [...transcript].sort((a, b) => (Number(a?.start) || 0) - (Number(b?.start) || 0));
+                let sequence = 0;
+
+                orderedSegments.forEach(segment => {
+                    if (!segment || !segment.text) return;
                     const words = segment.text.split(/\s+/).filter(w => w.trim());
-                    const segmentDuration = segment.duration || 2;
-                    const timePerWord = segmentDuration / Math.max(words.length, 1);
+                    const segmentStart = Number(segment.start);
+                    if (!Number.isFinite(segmentStart) || words.length === 0) return;
 
                     words.forEach((word, idx) => {
                         wordData.push({
                             word: word,
-                            timestamp: segment.start + (idx * timePerWord)
+                            timestamp: segmentStart,
+                            sequence: sequence++
                         });
                     });
                 });
 
-                // Find the word closest to the current timestamp
-                let closestIdx = 0;
-                let closestDiff = Math.abs(wordData[0]?.timestamp - timestamp) || Infinity;
+                return wordData.sort((a, b) => (a.timestamp - b.timestamp) || (a.sequence - b.sequence));
+            };
 
-                for (let i = 1; i < wordData.length; i++) {
-                    const diff = Math.abs(wordData[i].timestamp - timestamp);
-                    if (diff < closestDiff) {
-                        closestDiff = diff;
-                        closestIdx = i;
-                    }
+            const getLivePlayerTime = async (fallbackTime = 0) => {
+                const player = playerRef.current;
+                if (!player || typeof player.getCurrentTime !== 'function') return fallbackTime;
+
+                try {
+                    const playerTime = await Promise.resolve(player.getCurrentTime());
+                    return Number.isFinite(playerTime) ? playerTime : fallbackTime;
+                } catch (e) {
+                    return fallbackTime;
                 }
+            };
 
-                // Extract words before and after
-                const startIdx = Math.max(0, closestIdx - wordsBefore);
-                const endIdx = Math.min(wordData.length, closestIdx + wordsAfter + 1);
+            // Function to extract context words from transcript at a given timestamp
+            const getTranscriptContext = (transcript, timestamp, wordsBefore = 10, wordsAfter = 10) => {
+                const wordData = getTranscriptWordData(transcript);
+                if (!wordData || wordData.length === 0) return '';
+
+                const targetTime = Number(timestamp) || 0;
+                let splitIdx = wordData.findIndex(w => w.timestamp >= targetTime);
+                if (splitIdx === -1) splitIdx = wordData.length;
+
+                // Extract exactly the configured count before and after the live timestamp.
+                const startIdx = Math.max(0, splitIdx - wordsBefore);
+                const endIdx = Math.min(wordData.length, splitIdx + wordsAfter);
 
                 const contextWords = wordData.slice(startIdx, endIdx).map(w => w.word);
                 return contextWords.join(' ');
@@ -7157,43 +7172,7 @@ Third subtitle text`}
 
             // Function to extract extended context words from transcript (for AI enhancement)
             const getExtendedTranscriptContext = (transcript, timestamp, wordsBefore = 75, wordsAfter = 75) => {
-                if (!transcript || transcript.length === 0) return '';
-
-                // Build full text with word positions mapped to timestamps
-                const wordData = [];
-                transcript.forEach(segment => {
-                    const words = segment.text.split(/\s+/).filter(w => w.trim());
-                    const segmentDuration = segment.duration || 2;
-                    const timePerWord = segmentDuration / Math.max(words.length, 1);
-
-                    words.forEach((word, idx) => {
-                        wordData.push({
-                            word: word,
-                            timestamp: segment.start + (idx * timePerWord)
-                        });
-                    });
-                });
-
-                if (wordData.length === 0) return '';
-
-                // Find the word closest to the current timestamp
-                let closestIdx = 0;
-                let closestDiff = Math.abs(wordData[0]?.timestamp - timestamp) || Infinity;
-
-                for (let i = 1; i < wordData.length; i++) {
-                    const diff = Math.abs(wordData[i].timestamp - timestamp);
-                    if (diff < closestDiff) {
-                        closestDiff = diff;
-                        closestIdx = i;
-                    }
-                }
-
-                // Extract more words before and after for complete thought capture
-                const startIdx = Math.max(0, closestIdx - wordsBefore);
-                const endIdx = Math.min(wordData.length, closestIdx + wordsAfter + 1);
-
-                const contextWords = wordData.slice(startIdx, endIdx).map(w => w.word);
-                return contextWords.join(' ');
+                return getTranscriptContext(transcript, timestamp, wordsBefore, wordsAfter);
             };
 
             // Function to load transcript context into note field
@@ -7207,16 +7186,19 @@ Third subtitle text`}
                     ? video.youtubeVideoId
                     : (video.videoId || (video.sourceType === 'youtube' ? video.sourceId : null));
 
-                addDebugLog(`handleLoadContext start — videoId=${video.videoId || 'n/a'} sourceId=${video.sourceId || 'n/a'} sourceType=${video.sourceType || 'n/a'} resolvedYtId=${ytVideoId || 'NONE'} hasStoredTranscript=${!!video.transcript?.segments?.length}`);
+                const capturedTime = await getLivePlayerTime(currentTime);
+                setCurrentTime(capturedTime);
+
+                addDebugLog(`handleLoadContext start — videoId=${video.videoId || 'n/a'} sourceId=${video.sourceId || 'n/a'} sourceType=${video.sourceType || 'n/a'} resolvedYtId=${ytVideoId || 'NONE'} hasStoredTranscript=${!!video.transcript?.segments?.length} capturedTime=${capturedTime.toFixed(2)}`);
                 if (localStorage.getItem('ytBookmarks_debugMetaFetch') === 'true') setShowDebugPanel(true);
                 console.log('⚡ handleLoadContext:', {
                     videoId: video.videoId, sourceId: video.sourceId, sourceType: video.sourceType,
-                    resolved: ytVideoId, hasStoredTranscript: !!video.transcript
+                    resolved: ytVideoId, hasStoredTranscript: !!video.transcript, capturedTime
                 });
 
                 // Use stored transcript if available (uploaded SRT/VTT takes priority over fetching)
                 if (video.transcript?.segments?.length > 0) {
-                    const context = getTranscriptContext(video.transcript.segments, currentTime, contextWordCount, contextWordCount);
+                    const context = getTranscriptContext(video.transcript.segments, capturedTime, contextWordCount, contextWordCount);
                     if (context) {
                         setNewNote(context);
                     } else {
@@ -7231,8 +7213,6 @@ Third subtitle text`}
                 }
 
                 setIsLoadingContext(true);
-                // Capture timestamp at click time so polling uses the right position
-                const capturedTime = currentTime;
 
                 // Apply a fetched transcript to the note field
                 const applyTranscript = (transcript) => {
@@ -7765,8 +7745,11 @@ Third subtitle text`}
             };
 
             // Note handlers
-            const handleAddNote = () => {
+            const handleAddNote = async () => {
                 if (!newNote.trim()) return;
+
+                const noteTime = await getLivePlayerTime(currentTime);
+                setCurrentTime(noteTime);
 
                 // Get author info (first 3 letters of username, uppercase)
                 const authorShort = currentUser?.username?.substring(0, 3).toUpperCase() || 'USR';
@@ -7775,7 +7758,7 @@ Third subtitle text`}
                 const newNoteObj = {
                     id: generateId(),
                     text: newNote.trim(),
-                    timestamp: currentTime,
+                    timestamp: noteTime,
                     createdAt: new Date().toISOString(),
                     author: authorShort,
                     authorFull: authorFull
